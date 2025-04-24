@@ -1,92 +1,21 @@
-//SPDX-License-Identifier: Unlicense
-pragma solidity ^0.8.0;
+// SPDX-License-Identifier: SEE LICENSE IN LICENSE
+pragma solidity ^0.8.20;
 
+// Import the solidity hardhat tools
 import "hardhat/console.sol";
 
+// The "Token" Contract 
 contract Token {
-    string public name;
-    string public symbol;
-    uint256 public decimals = 18;
-    uint256 public totalSupply;
+    // A string(or word) variable that can be seen outside the contract by using the public "visibility" flag.
+    string public tokenName;
+    // A string(or word) variable that can be seen outside the contract by using the public "visibility" flag.
+    string public tokenSymbol; 
+    // An unsigned integer variable that can be ((2^256)-1) characters long that can be seen outside the contract. This declares the decimal places of the token to have 18 decimal places making it the same as ETH. This is a common practice in the ERC20 standard
+    uint256 public decimalPlaces = 18; 
+    // An unsigned integer variable that can be ((2^256)-1) characters long that can be seen outside the contract. This variable is meant to keep track of the token's (the token we are making with this contract) total supply. 
+    uint256 public tokenTotalSupply; 
 
-    mapping(address => uint256) public balanceOf;
-    mapping(address => mapping(address => uint256)) public allowance;
-
-    event Transfer(
-        address indexed from,
-        address indexed to,
-        uint256 value
-    );
-
-    event Approval(
-        address indexed owner,
-        address indexed spender,
-        uint256 value
-    );
-
-    constructor(
-        string memory _name,
-        string memory _symbol,
-        uint256 _totalSupply
-    ) {
-        name = _name;
-        symbol = _symbol;
-        totalSupply = _totalSupply * (10**decimals);
-        balanceOf[msg.sender] = totalSupply;
-    }
-
-    function transfer(address _to, uint256 _value)
-        public
-        returns (bool success)
-    {
-        require(balanceOf[msg.sender] >= _value);
-
-        _transfer(msg.sender, _to, _value);
-
-        return true;
-    }
-
-    function _transfer(
-        address _from,
-        address _to,
-        uint256 _value
-    ) internal {
-        require(_to != address(0));
-
-        balanceOf[_from] = balanceOf[_from] - _value;
-        balanceOf[_to] = balanceOf[_to] + _value;
-
-        emit Transfer(_from, _to, _value);
-    }
-
-    function approve(address _spender, uint256 _value)
-        public
-        returns(bool success)
-    {
-        require(_spender != address(0));
-
-        allowance[msg.sender][_spender] = _value;
-
-        emit Approval(msg.sender, _spender, _value);
-        return true;
-    }
-
-    function transferFrom(
-        address _from,
-        address _to,
-        uint256 _value
-    )
-        public
-        returns (bool success)
-    {
-        require(_value <= balanceOf[_from]);
-        require(_value <= allowance[_from][msg.sender]);
-
-        allowance[_from][msg.sender] = allowance[_from][msg.sender] - _value;
-
-        _transfer(_from, _to, _value);
-
-        return true;
-    }
+    // Mapp
+    mapping(address => uint256) public balanceOf
 
 }
