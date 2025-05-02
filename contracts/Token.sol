@@ -1,5 +1,6 @@
+
 // SPDX-License-Identifier: SEE LICENSE IN LICENSE
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.28;
 
 // Import the solidity hardhat tools
 import "hardhat/console.sol";
@@ -133,3 +134,46 @@ contract Token {
         return true;
     }
 }
+
+
+/*
+Contract Structure Overview
+State Variables Section (Lines 8-24)
+
+This section defines the core data storage for the token including
+the token name, symbol, decimal places, total supply, and balance tracking.
+Contains mappings that store token balances and allowances for each address.
+
+
+Events Section (Lines 26-40)
+This section defines the events that will be emitted during token transfers and approvals.
+These events allow external applications to track token movements on the blockchain.
+
+
+
+Constructor Section (Lines 42-55)
+This section initializes the token when the contract is deployed.
+Sets the token name, symbol, calculates the total supply with decimals, and assigns all tokens to the deployer.
+Transfer Functions Section (Lines 57-78)
+This section contains the public transfer function and internal _transfer function.
+Allows users to send tokens directly to another address.
+The internal function handles the actual balance updates and event emission.
+
+
+Approval Function Section (Lines 80-96)
+This section contains the approve function.
+Allows users to authorize another address (a spender) to transfer tokens on their behalf.
+Sets allowances in the tokenAllowance mapping.
+
+
+TransferFrom Function Section (Lines 98-121)
+This section contains the transferFrom function.
+Enables approved spenders to transfer tokens between addresses.
+Checks allowances, updates balances, and reduces the spender's allowance after use.
+
+
+This contract implements the core functionality of the ERC-20 token standard, 
+providing the basic mechanisms for token transfers and approvals. 
+It's well-structured with clear separation of concerns between different token operations.
+*/
+
