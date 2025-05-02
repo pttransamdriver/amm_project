@@ -1,3 +1,4 @@
+
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.0;
 
@@ -5,207 +6,212 @@ import "hardhat/console.sol";
 import "./Token.sol";
 
 contract AMM {
-    Token public token1;
-    Token public token2;
+    // Token contracts for the trading pair
+    Token public tokenA;
+    Token public tokenB;
 
-    uint256 public token1Balance;
-    uint256 public token2Balance;
-    uint256 public K;
+    // Current liquidity pool balances
+    uint256 public tokenAReserve;
+    uint256 public tokenBReserve;
+    
+    // Constant product invariant (tokenAReserve * tokenBReserve = constantProduct)
+    uint256 public constantProduct;
 
-    uint256 public totalShares;
-    mapping(address => uint256) public shares;
-    uint256 constant PRECISION = 10**18;
+    // Liquidity provider tracking
+    uint256 public totalLiquidityShares;
+    mapping(address => uint256) public liquidityProviderShares;
+    uint256 constant PRECISION_FACTOR = 10**18;
 
     event Swap(
         address user,
-        address tokenGive,
-        uint256 tokenGiveAmount,
-        address tokenGet,
-        uint256 tokenGetAmount,
-        uint256 token1Balance,
-        uint256 token2Balance,
+        address tokenProvided,
+        uint256 amountProvided,
+        address tokenReceived,
+        uint256 amountReceived,
+        uint256 newTokenAReserve,
+        uint256 newTokenBReserve,
         uint256 timestamp
     );
 
-    constructor(Token _token1, Token _token2) {
-        token1 = _token1;
-        token2 = _token2;
+    constructor(Token _tokenA, Token _tokenB) {
+        tokenA = _tokenA;
+        tokenB = _tokenB;
     }
 
-    function addLiquidity(uint256 _token1Amount, uint256 _token2Amount) external {
+    function addLiquidity(uint256 _tokenAAmount, uint256 _tokenBAmount) external {
         // Deposit Tokens
         require(
-            token1.transferFrom(msg.sender, address(this), _token1Amount),
-            "failed to transfer token 1"
+            tokenA.transferFrom(msg.sender, address(this), _tokenAAmount),
+            "failed to transfer token A"
         );
         require(
-            token2.transferFrom(msg.sender, address(this), _token2Amount),
-            "failed to transfer token 2"
+            tokenB.transferFrom(msg.sender, address(this), _tokenBAmount),
+            "failed to transfer token B"
         );
 
         // Issue Shares
-        uint256 share;
+        uint256 liquiditySharesIssued;
 
         // If first time adding liquidity, make share 100
-        if (totalShares == 0) {
-            share = 100 * PRECISION;
+        if (totalLiquidityShares == 0) {
+            liquiditySharesIssued = 100 * PRECISION_FACTOR;
         } else {
-            uint256 share1 = (totalShares * _token1Amount) / token1Balance;
-            uint256 share2 = (totalShares * _token2Amount) / token2Balance;
+            uint256 sharesBasedOnTokenA = (totalLiquidityShares * _tokenAAmount) / tokenAReserve;
+            uint256 sharesBasedOnTokenB = (totalLiquidityShares * _tokenBAmount) / tokenBReserve;
             require(
-                (share1 / 10**3) == (share2 / 10**3),
-                "must provide equal token amounts"
+                (sharesBasedOnTokenA / 10**3) == (sharesBasedOnTokenB / 10**3),
+                "must provide balanced liquidity amounts"
             );
-            share = share1;
+            liquiditySharesIssued = sharesBasedOnTokenA;
         }
 
-        // Manage Pool
-        token1Balance += _token1Amount;
-        token2Balance += _token2Amount;
-        K = token1Balance * token2Balance;
+        // Update Pool Reserves
+        tokenAReserve += _tokenAAmount;
+        tokenBReserve += _tokenBAmount;
+        constantProduct = tokenAReserve * tokenBReserve;
 
         // Updates shares
-        totalShares += share;
-        shares[msg.sender] += share;
+        totalLiquidityShares += liquiditySharesIssued;
+        liquidityProviderShares[msg.sender] += liquiditySharesIssued;
     }
 
-    // Determine how many token2 tokens must be deposited when depositing liquidity for token1
-    function calculateToken2Deposit(uint256 _token1Amount)
+    // Calculate how many tokenB tokens must be deposited when adding liquidity with tokenA
+    function calculateTokenBDeposit(uint256 _tokenAAmount)
         public
         view
-        returns (uint256 token2Amount)
+        returns (uint256 requiredTokenBAmount)
     {
-        token2Amount = (token2Balance * _token1Amount) / token1Balance;
+        requiredTokenBAmount = (tokenBReserve * _tokenAAmount) / tokenAReserve;
     }
 
-    // Determine how many token1 tokens must be deposited when depositing liquidity for token2
-    function calculateToken1Deposit(uint256 _token2Amount)
+    // Calculate how many tokenA tokens must be deposited when adding liquidity with tokenB
+    function calculateTokenADeposit(uint256 _tokenBAmount)
         public
         view
-        returns (uint256 token1Amount)
+        returns (uint256 requiredTokenAAmount)
     {
-        token1Amount = (token1Balance * _token2Amount) / token2Balance;
+        requiredTokenAAmount = (tokenAReserve * _tokenBAmount) / tokenBReserve;
     }
 
-    // Returns amount of token2 received when swapping token1
-    function calculateToken1Swap(uint256 _token1Amount)
+    // Calculate amount of tokenB received when swapping tokenA
+    function calculateTokenAToTokenBSwap(uint256 _tokenAAmount)
         public
         view
-        returns (uint256 token2Amount)
+        returns (uint256 tokenBOutput)
     {
-        uint256 token1After = token1Balance + _token1Amount;
-        uint256 token2After = K / token1After;
-        token2Amount = token2Balance - token2After;
+        uint256 tokenAReserveAfterSwap = tokenAReserve + _tokenAAmount;
+        uint256 tokenBReserveAfterSwap = constantProduct / tokenAReserveAfterSwap;
+        tokenBOutput = tokenBReserve - tokenBReserveAfterSwap;
 
         // Don't let the pool go to 0
-        if (token2Amount == token2Balance) {
-            token2Amount--;
+        if (tokenBOutput == tokenBReserve) {
+            tokenBOutput--;
         }
 
-        require(token2Amount < token2Balance, "swap amount to large");
+        require(tokenBOutput < tokenBReserve, "swap amount too large");
     }
 
-    function swapToken1(uint256 _token1Amount)
+    function swapTokenAForTokenB(uint256 _tokenAAmount)
         external
-        returns(uint256 token2Amount)
+        returns(uint256 tokenBOutput)
     {
-        // Calculate Token 2 Amount
-        token2Amount = calculateToken1Swap(_token1Amount);
+        // Calculate Token B Output Amount
+        tokenBOutput = calculateTokenAToTokenBSwap(_tokenAAmount);
 
-        // Do Swap
-        token1.transferFrom(msg.sender, address(this), _token1Amount);
-        token1Balance += _token1Amount;
-        token2Balance -= token2Amount;
-        token2.transfer(msg.sender, token2Amount);
+        // Execute Swap
+        tokenA.transferFrom(msg.sender, address(this), _tokenAAmount);
+        tokenAReserve += _tokenAAmount;
+        tokenBReserve -= tokenBOutput;
+        tokenB.transfer(msg.sender, tokenBOutput);
 
-        // Emit an event
+        // Emit swap event
         emit Swap(
             msg.sender,
-            address(token1),
-            _token1Amount,
-            address(token2),
-            token2Amount,
-            token1Balance,
-            token2Balance,
+            address(tokenA),
+            _tokenAAmount,
+            address(tokenB),
+            tokenBOutput,
+            tokenAReserve,
+            tokenBReserve,
             block.timestamp
         );
     }
 
-    // Returns amount of token1 received when swapping token2
-    function calculateToken2Swap(uint256 _token2Amount)
+    // Calculate amount of tokenA received when swapping tokenB
+    function calculateTokenBToTokenASwap(uint256 _tokenBAmount)
         public
         view
-        returns (uint256 token1Amount)
+        returns (uint256 tokenAOutput)
     {
-        uint256 token2After = token2Balance + _token2Amount;
-        uint256 token1After = K / token2After;
-        token1Amount = token1Balance - token1After;
+        uint256 tokenBReserveAfterSwap = tokenBReserve + _tokenBAmount;
+        uint256 tokenAReserveAfterSwap = constantProduct / tokenBReserveAfterSwap;
+        tokenAOutput = tokenAReserve - tokenAReserveAfterSwap;
 
         // Don't let the pool go to 0
-        if (token1Amount == token1Balance) {
-            token1Amount--;
+        if (tokenAOutput == tokenAReserve) {
+            tokenAOutput--;
         }
 
-        require(token1Amount < token1Balance, "swap amount to large");
+        require(tokenAOutput < tokenAReserve, "swap amount too large");
     }
 
-    function swapToken2(uint256 _token2Amount)
+    function swapTokenBForTokenA(uint256 _tokenBAmount)
         external
-        returns(uint256 token1Amount)
+        returns(uint256 tokenAOutput)
     {
-        // Calculate Token 1 Amount
-        token1Amount = calculateToken2Swap(_token2Amount);
+        // Calculate Token A Output Amount
+        tokenAOutput = calculateTokenBToTokenASwap(_tokenBAmount);
 
-        // Do Swap
-        token2.transferFrom(msg.sender, address(this), _token2Amount);
-        token2Balance += _token2Amount;
-        token1Balance -= token1Amount;
-        token1.transfer(msg.sender, token1Amount);
+        // Execute Swap
+        tokenB.transferFrom(msg.sender, address(this), _tokenBAmount);
+        tokenBReserve += _tokenBAmount;
+        tokenAReserve -= tokenAOutput;
+        tokenA.transfer(msg.sender, tokenAOutput);
 
-        // Emit an event
+        // Emit swap event
         emit Swap(
             msg.sender,
-            address(token2),
-            _token2Amount,
-            address(token1),
-            token1Amount,
-            token1Balance,
-            token2Balance,
+            address(tokenB),
+            _tokenBAmount,
+            address(tokenA),
+            tokenAOutput,
+            tokenAReserve,
+            tokenBReserve,
             block.timestamp
         );
     }
 
-    // Determine how many tokens will be withdrawn
-    function calculateWithdrawAmount(uint256 _share)
+    // Calculate withdrawal amounts based on liquidity shares
+    function calculateWithdrawalAmounts(uint256 _sharesAmount)
         public
         view
-        returns (uint256 token1Amount, uint256 token2Amount)
+        returns (uint256 tokenAAmount, uint256 tokenBAmount)
     {
-        require(_share <= totalShares, "must be less than total shares");
-        token1Amount = (_share * token1Balance) / totalShares;
-        token2Amount = (_share * token2Balance) / totalShares;
+        require(_sharesAmount <= totalLiquidityShares, "exceeds total available shares");
+        tokenAAmount = (_sharesAmount * tokenAReserve) / totalLiquidityShares;
+        tokenBAmount = (_sharesAmount * tokenBReserve) / totalLiquidityShares;
     }
 
-    // Removes liquidity from the pool
-    function removeLiquidity(uint256 _share)
+    // Remove liquidity from the pool
+    function removeLiquidity(uint256 _sharesAmount)
         external
-        returns(uint256 token1Amount, uint256 token2Amount)
+        returns(uint256 tokenAAmount, uint256 tokenBAmount)
     {
         require(
-            _share <= shares[msg.sender],
-            "cannot withdraw more shares than you have"
+            _sharesAmount <= liquidityProviderShares[msg.sender],
+            "insufficient liquidity shares"
         );
 
-        (token1Amount, token2Amount) = calculateWithdrawAmount(_share);
+        (tokenAAmount, tokenBAmount) = calculateWithdrawalAmounts(_sharesAmount);
 
-        shares[msg.sender] -= _share;
-        totalShares -= _share;
+        liquidityProviderShares[msg.sender] -= _sharesAmount;
+        totalLiquidityShares -= _sharesAmount;
 
-        token1Balance -= token1Amount;
-        token2Balance -= token2Amount;
-        K = token1Balance * token2Balance;
+        tokenAReserve -= tokenAAmount;
+        tokenBReserve -= tokenBAmount;
+        constantProduct = tokenAReserve * tokenBReserve;
 
-        token1.transfer(msg.sender, token1Amount);
-        token2.transfer(msg.sender, token2Amount);
+        tokenA.transfer(msg.sender, tokenAAmount);
+        tokenB.transfer(msg.sender, tokenBAmount);
     }
 }
