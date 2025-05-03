@@ -5,16 +5,11 @@ pragma solidity ^0.8.28;
 // Import the solidity hardhat tools
 import "hardhat/console.sol";
 
-<<<<<<< HEAD
 // The "Token" Contract - This contract implements a basic ERC20 token with transfer, approval, and transferFrom functionality
-=======
-// The "Token" Contract (this contracts name)
->>>>>>> 70108a9 (Syncing up changes)
 contract Token {
     // A string(or word) variable that can be seen outside the contract by using the public "visibility" flag.
     string public tokenName;
     // A string(or word) variable that can be seen outside the contract by using the public "visibility" flag.
-<<<<<<< HEAD
     string public tokenSymbol;
     // An unsigned integer variable that can be ((2^256)-1) characters long that can be seen outside the contract. This declares the decimal places of the token to have 18 decimal places making it the same as ETH. This is a common practice in the ERC20 standard
     uint256 public decimalPlaces = 18;
@@ -181,37 +176,3 @@ This contract implements the core functionality of the ERC-20 token standard,
 providing the basic mechanisms for token transfers and approvals. 
 It's well-structured with clear separation of concerns between different token operations.
 */
-=======
-    string public tokenSymbol; 
-    // An unsigned integer variable that can be ((2^256)-1) bits long that can be seen outside the contract. This declares the decimal places of the token to have 18 decimal places making it the same as ETH. This is a common practice in the ERC20 standard
-    uint256 public decimalPlaces = 18; 
-    // An unsigned integer variable that can be ((2^256)-1) bits long that can be seen outside the contract. This variable is meant to keep track of the token's (the token we are making with this contract) total supply. 
-    uint256 public tokenTotalSupply; 
-
-    // A "mapping" called accoundBalance (would normally be called "balanceOf" in the ERC20 standard but in this case has a more descriptive name). A mapping is a key-value pair. In this case the "address" is the key and the "uint256" is the value. The address is the "senders" or the address of teh wallet the user of the contract is using. The uint256 value is the amount of tokens they have (that is declaired in the contructor)
-    mapping(address => uint256) public accountBalance; // When you call "accountBalance" you get the tokens in the address that is interacting with the token contract
-    // Nested mapping within a mapping so instead of key-value pair think key1-(key2-value) pair. The key1 address is the users address that is using the contract. The key2 address is the approved spenders address. When metamask pops up and says "do you approve to spend this?" That's that would me metamasks address being used
-    mapping(address => mapping(address => uint256)) public approvalAllowance; 
-
-    // Events are keywords the declare an logging on the blockchain. These are listened to by external applications
-    // "Transfer" is the name of the event like the contract name is for the contract
-    // "address" is a variable type, "indexed" means is a filterable so that you don't need to scan the event again to get your variable parameter
-    // "senderAddress" means the address of the user interacting with the token contract, sending tokens
-    // "recipientAddress" 
-    event Transfer(
-        address indexed senderAddress,
-        address indexed recipientAddress,   
-        uint256 transferAmount             
-    )
-    /*
-
-    This is the common way to write this event. The descriptive one above is for educational purposes. For production deployment use this following event: 
-    event Transfer(
-        address indexed from,
-        address indexed to,
-        uint256 value
-    );
-    */
-
->>>>>>> 70108a9 (Syncing up changes)
-
