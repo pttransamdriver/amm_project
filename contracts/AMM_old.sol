@@ -52,7 +52,6 @@ contract AMM {
         // Issue Shares
         uint256 liquiditySharesIssued;
 
-        // If first time adding liquidity, make share 100
         if (totalLiquidityShares == 0) {
             liquiditySharesIssued = 100 * PRECISION_FACTOR;
         } else {
