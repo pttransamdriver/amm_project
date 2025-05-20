@@ -49,32 +49,38 @@ contract AMM {
         // The constructor is called when the contract is deployed, and it sets the initial values for the state variables.
     }
 
+    // This function starts off with the 'require' statments. These require statments will require the user to deposit both TokenA and TokenB
     function addLiquidity(uint256 _tokenA_Amount, uint256 _tokenB_Amount) external {
-        // require the deposit of tokens 
+        // 'require' the deposit of tokens via the "transferFrom" function. This also requires the approve function be called from the token contract
         require(
             tokenA.transferFrom(msg.sender, address(this), _tokenA_Amount), "failed to transfer token A"
         );
-
+        // 'require' the deposit of tokens via the "transferFrom" function. This also requires the approve function be called from the token contract
         require(
             tokenB.transferFrom(msg.sender, address(this), _tokenB_Amount), "failed to transfer token B"
         );
-
-        uint256 liquditySharesIssued;
         
-        // If statement declares a variable totalLiquidityShares. If it is equal to 0, then it is the first time adding liquidity.
-        if (totalLiquidityShares == 0) {
-            liquiditySharesIssued == 100 * PRECISION_FACTOR;
-        } else {
-            uint256 sharesBasedOnTokenA = (totalLiquidityShares * _tokenA_Amount) / tokenABalance;
-            uint256 sharesBasedOnTokenB = (totalLiquidityShares * _tokenB_Amount) / tokenBBalance;
+        // Issue Shares utilizine the "ternary operator" like this: condition ? expression_if_true : expression_if_false
+        uint256 liquiditySharesIssued = totalLiquidityShares == 0 
+            ? 100 * PRECISION_FACTOR : (totalLiquidityShares * _tokenAAmount) / tokenAReserve;
+
+        if (totalLiquidityShares > 0) {
+            uint256 sharesBasedOnTokenB = (totalLiquidityShares * _tokenBAmount) / tokenBReserve;
             require(
-                (sharesBasedOnTokenA / 10**3) == (sharesBasedOnTokenB / 10**3),
+                (liquiditySharesIssued / 10**3) == (sharesBasedOnTokenB / 10**3),
                 "must provide balanced liquidity amounts"
             );
-            liquiditySharesIssued = sharesBasedOnTokenA;
         }
+        /* Looks like this if it was an if - else statement:
+         uint256 liquiditySharesIssued;
+         if (totalLiquidityShares == 0) {
+           liquiditySharesIssued = 100 * PRECISION_FACTOR;
+         } else {
+            liquiditySharesIssued = (totalLiquidityShares * _tokenAAmount) / tokenAReserve;
+         }
+         */
 
-        // Update Pool Balances
+        // Update the Liquidity Pool Balances 
         tokenABalance += _tokenA_Amount;
         tokenBBalance += _tokenB_Amount;
         constantProduct = tokenABalance * tokenBBalance;
@@ -84,6 +90,8 @@ contract AMM {
         liquidityProviderShares[msg.sender] += liquiditySharesIssued;
 
     }
+
+}
 
 
 
