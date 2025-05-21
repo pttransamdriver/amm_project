@@ -85,11 +85,18 @@ contract AMM_me_edit {
         tokenBBalance += _tokenB_Amount;
         constantProduct = tokenABalance * tokenBBalance;
 
-        // Update Shares
+        // Update Shares that have been haded out. Shares can build indefinatly and will be burned when shares are exchanged for tokens. 
         totalLiquidityShares += liquiditySharesIssued;
         liquidityProviderShares[msg.sender] += liquiditySharesIssued;
-
+        
     }
+
+    //
+    function calculateTokenBDepositAmount(uint256 _tokenAAmount) public view returns (uint256 requiredTokenBAmount) {
+        requiredTokenBAmount = (tokenBReserve * tokenAAmount) / tokenAReserve
+    }
+
+
 
 }
 
