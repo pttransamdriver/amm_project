@@ -91,9 +91,25 @@ contract AMM_me_edit {
         
     }
 
-    //
-    function calculateTokenBDepositAmount(uint256 _tokenAAmount) public view returns (uint256 requiredTokenBAmount) {
-        requiredTokenBAmount = (tokenBReserve * tokenAAmount) / tokenAReserve
+    function calaulateSwapOutput(
+        uint256 inputAmount,
+        uint256 inputReserve,
+        uint256 outputReserve
+    )
+        public
+        view
+        returns (uint256 outputAmount)
+    {
+        uint256 inputReserveAfterSwap = inputReserve + inputAmount;
+        uint256 outputReserveAfterSwap = constantProduct / inputReserveAfterSwap;
+        outputAmount = outputReserve - outputReserveAfterSwap;
+
+        // Don't let the pool go to 0
+        if (outputAmount == outputReserve) {
+            outputAmount--;
+        }
+
+        require(outputAmount < outputReserve, "swap amount too large");
     }
 
 
