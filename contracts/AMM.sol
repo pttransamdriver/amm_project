@@ -7,7 +7,7 @@ import "./Token.sol";
 
 // AMM Contract declaration. Also defines tokens 1 and 2 as variables.
 // Contract declares token balances and varable "k"
-contract AMM {
+contract AMM_me_edit {
     //Declaire Tokens:
     Token public tokenA;
     Token public tokenB;
@@ -85,11 +85,18 @@ contract AMM {
         tokenBBalance += _tokenB_Amount;
         constantProduct = tokenABalance * tokenBBalance;
 
-        // Update Shares
+        // Update Shares that have been haded out. Shares can build indefinatly and will be burned when shares are exchanged for tokens. 
         totalLiquidityShares += liquiditySharesIssued;
         liquidityProviderShares[msg.sender] += liquiditySharesIssued;
-
+        
     }
+
+    //
+    function calculateTokenBDepositAmount(uint256 _tokenAAmount) public view returns (uint256 requiredTokenBAmount) {
+        requiredTokenBAmount = (tokenBReserve * tokenAAmount) / tokenAReserve
+    }
+
+
 
 }
 
