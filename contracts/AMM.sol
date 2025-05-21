@@ -7,7 +7,7 @@ import "./Token.sol";
 
 // AMM Contract declaration. Also defines tokens 1 and 2 as variables.
 // Contract declares token balances and varable "k"
-contract AMM {
+contract AMM_me_edit {
     //Declaire Tokens:
     Token public tokenA;
     Token public tokenB;
