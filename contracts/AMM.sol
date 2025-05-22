@@ -90,27 +90,61 @@ contract AMM_me_edit {
         liquidityProviderShares[msg.sender] += liquiditySharesIssued;
         
     }
-
-    function calaulateSwapOutput(
-        uint256 inputAmount,
-        uint256 inputReserve,
-        uint256 outputReserve
-    )
+    // Calculate how many tokenA tokens must be deposited when adding liquidity with tokenB
+    function calculateTokenADeposit (uint256 _tokenB_Amount)
         public
         view
-        returns (uint256 outputAmount)
+        returns (uint256 requiredTokenAAmount)
     {
-        uint256 inputReserveAfterSwap = inputReserve + inputAmount;
-        uint256 outputReserveAfterSwap = constantProduct / inputReserveAfterSwap;
-        outputAmount = outputReserve - outputReserveAfterSwap;
+        requiredTokenAAmount = (tokenABalance * _tokenB_Amount) / tokenBBalance;
+    }
+
+    // Calculate how many tokenB tokens must be deposited when adding liquidity with tokenA
+    function calculateTokenBDeposit (uint256 _tokenA_Amount)
+        public
+        view
+        returns (uint256 requiredTokenBAmount)
+    {
+        requiredTokenBAmount = (tokenBBalance * _tokenA_Amount) / tokenABalance;
+    }
+
+    // Calculate amount of tokenA received when swapping tokenB
+    function calculateTokenBToTokenASwap (uint256 _tokenB_Amount)
+        public
+        view
+        returns (uint256 tokenAOutput)
+    {
+        uint256 tokenBBalanceAfterSwap = tokenBBalance + _tokenB_Amount;
+        uint256 tokenABalanceAfterSwap = constantProduct / tokenBBalanceAfterSwap;
+        tokenAOutput = tokenABalance - tokenABalanceAfterSwap;
 
         // Don't let the pool go to 0
-        if (outputAmount == outputReserve) {
-            outputAmount--;
+        if (tokenAOutput == tokenABalance) {
+            tokenAOutput--;
+        }
+        // Token A Output must be less than the current balance of Token A in the pool. This requirement stops this function from being called if too many tokens are swapped.
+        require(tokenAOutput < tokenABalance, "swap amount too large");
+    }
+
+    // Calculate amount of tokenB received when swapping tokenA
+    function calculateTokenAToTokenBSwap (uint256 _tokenA_Amount)
+        public
+        view
+        returns (uint256 tokenBOutput)
+    {
+        uint256 tokenABalanceAfterSwap = tokenABalance + _tokenA_Amount;
+        uint256 tokenBBalanceAfterSwap = constantProduct / tokenABalanceAfterSwap;
+        tokenBOutput = tokenBBalance - tokenBBalanceAfterSwap;
+
+        // Don't let the pool go to 0
+        if (tokenBOutput == tokenBBalance) {
+            tokenBOutput--;
         }
 
-        require(outputAmount < outputReserve, "swap amount too large");
+        require(tokenBOutput < tokenBBalance, "swap amount too large");
     }
+
+
 
 
 
