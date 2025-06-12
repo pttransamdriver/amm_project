@@ -1,178 +1,96 @@
-
 // SPDX-License-Identifier: SEE LICENSE IN LICENSE
 pragma solidity ^0.8.28;
 
-// Import the solidity hardhat tools
+// Import the hardhat console for debug logging
 import "hardhat/console.sol";
 
-// The "Token" Contract - This contract implements a basic ERC20 token with transfer, approval, and transferFrom functionality
+// Main contract declaration
 contract Token {
-    // A string(or word) variable that can be seen outside the contract by using the public "visibility" flag.
-    string public tokenName;
-    // A string(or word) variable that can be seen outside the contract by using the public "visibility" flag.
-    string public tokenSymbol;
-    // An unsigned integer variable that can be ((2^256)-1) characters long that can be seen outside the contract. This declares the decimal places of the token to have 18 decimal places making it the same as ETH. This is a common practice in the ERC20 standard
-    uint256 public decimalPlaces = 18;
-    // An unsigned integer variable that can be ((2^256)-1) characters long that can be seen outside the contract. This variable is meant to keep track of the token's (the token we are making with this contract) total supply.
-    uint256 public tokenTotalSupply;
+    string public name; // "name" here means the name of the token. 
+    string public symbol; // "symbol" here means the symbol of the token. 
+    uint256 public decimals = 18; // "decimals" here means the number of decimal places the token has. 
+    uint256 public totalSupply; // "totalSupply" here means the total amount of tokens in circulation. Think, total tokens supplied
 
-    // Mapping that associates each address with their token balance. This is a key-value store where the key is an Ethereum address and the value is their token balance.
+    // Mapping that keeps track of the balance of each address.
     mapping(address => uint256) public balanceOf;
-    // A nested mapping that keeps track of allowances. This is a mapping of owner addresses to a mapping of spender addresses to amounts.
-    // It tracks how many tokens the spender is allowed to transfer on behalf of the owner.
-    mapping(address => mapping(address => uint256)) public tokenAllowance;
+    // Mapping that keeps track of the allowance of each address to spend tokens on behalf of another address.
+    mapping(address => mapping(address => uint256)) public allowance;
 
-    // Event emitted when tokens are transferred from one address to another.
-    // The 'indexed' keyword makes it easier to filter and search for these events.
+    // Event that is emitted when tokens are transferred from one address to another.
     event Transfer(
-        address indexed senderAddress,
-        address indexed receiverAddress,
-        uint256 transferAmount
+        address indexed from,
+        address indexed to,
+        uint256 value
     );
 
-    // Event emitted when an address approves another address to spend tokens on its behalf.
-    // The 'indexed' keyword makes it easier to filter and search for these events.
+    // Event that is emitted when an allowance is set for an address to spend tokens on behalf of another address.
     event Approval(
-        address indexed ownerAddress,
-        address indexed spenderAddress,
-        uint256 approvedAmount
+        address indexed owner,
+        address indexed spender,
+        uint256 value
     );
 
-    // Constructor function that runs once when the contract is deployed.
-    // It initializes the token with a name, symbol, and total supply.
+    // Constructor that is called when the contract is deployed.
     constructor(
-        string memory initialTokenName,
-        string memory initialTokenSymbol,
-        uint256 initialTotalSupply
+        string memory _name,
+        string memory _symbol,
+        uint256 _totalSupply
     ) {
-        // Set the token name to the provided name
-        tokenName = initialTokenName;
-        // Set the token symbol to the provided symbol
-        tokenSymbol = initialTokenSymbol;
-        // Calculate the total supply with the correct number of decimal places
-        // We multiply by 10^decimalPlaces to account for the decimal representation
-        tokenTotalSupply = initialTotalSupply * (10**decimalPlaces);
-        // Assign the entire token supply to the contract deployer (msg.sender)
-        balanceOf[msg.sender] = tokenTotalSupply;
+        name =_name; // "name" the state variable is being converted to a parameter "_name" for standard solidity convention
+        symbol = _symbol; // "symbol" the state variable is being converted to a parameter "_symbol" for standard solidity convention
+        totalSupply = _totalSupply * (10**decimals); // "totalSupply" the state variable is being converted to a parameter "_totalSupply". The total supply the parameter is now multiplied by 10 to the power of the number of decimals. This is to account for the decimal places since solidity does not have decimal places.
+        balanceOf[msg.sender] = totalSupply; // "balanceOf" the mapping is being used to set the balance of the address that deployed the contract to the total supply. The address that deployed the contract is "msg.sender".
+        
     }
 
-    // Public function that allows a user to transfer their tokens to another address
-    // Returns a boolean indicating whether the transfer was successful
-    function transfer(address receiverAddress, uint256 transferAmount)
+    // Function that handles the the external interface - validating the sender has enough balance and then calls the internal transfer function.
+    function transfer(address _to, uint256 _value)
         public
-        returns (bool transferSuccess)
+        returns (bool success)
     {
-        // Check if the sender has enough tokens to transfer
-        require(balanceOf[msg.sender] >= transferAmount, "Insufficient balance for transfer");
+        require(balanceOf[msg.sender] >= _value); // "require" is a keyword that checks if the condition is true. If it is not, the transaction is reverted. In this case, we are checking if the balance of the address that is calling the function is greater than or equal to the "_value" that is being transferred. If it is not, the transaction is reverted.
+        _transfer(msg.sender, _to, _value); // "_transfer" is a function that is defined below. This function is used to transfer the tokens from one address to another. It is called internally because it is not part of the external interface. 
+        return true; // "return" is a keyword that returns a value from a function. In this case, we are returning "true" to the "event" tracker to indicate that the transaction was successful.
 
-        // Call the internal _transfer function to handle the actual transfer logic
-        _transfer(msg.sender, receiverAddress, transferAmount);
-
-        // Return true to indicate the transfer was successful
-        return true;
     }
 
-    // Internal function that handles the actual token transfer logic
-    // This is called by both transfer and transferFrom functions
+    // Internal function that transfers tokens from one address to another.
     function _transfer(
-        address senderAddress,
-        address receiverAddress,
-        uint256 transferAmount
+        address _from,
+        address _to,
+        uint256 _value
     ) internal {
-        // Ensure the recipient is not the zero address (burning tokens unintentionally)
-        require(receiverAddress != address(0), "Cannot transfer to the zero address");
-
-        // Subtract the transfer amount from the sender's balance
-        balanceOf[senderAddress] = balanceOf[senderAddress] - transferAmount;
-        // Add the transfer amount to the receiver's balance
-        balanceOf[receiverAddress] = balanceOf[receiverAddress] + transferAmount;
-
-        // Emit a Transfer event to log this transaction on the blockchain
-        emit Transfer(senderAddress, receiverAddress, transferAmount);
+        require(_to != address(0)); // Require the destination address is not the zero address. This is just a solidity standard unless you want to let users burn their tokens.
+        balanceOf[_from] -= _value; // Subtract the value from the balance of the sender.
+        balanceOf[_to] += _value; // Add the value to the balance of the recipient.
+        emit Transfer(_from, _to, _value); // Emit the transfer event for reference.
     }
 
-    // Public function that allows a user to approve another address (spender) to spend tokens on their behalf
-    // Returns a boolean indicating whether the approval was successful
-    function approve(address spenderAddress, uint256 approvedAmount)
+    // Function that reaches out to the external interface to approve a spender to spend tokens on behalf of the owner.
+    function approve(address _spender, uint256 _value)
         public
-        returns(bool approvalSuccess)
+        returns (bool success)
     {
-        // Ensure the spender is not the zero address
-        require(spenderAddress != address(0), "Cannot approve the zero address as spender");
-
-        // Set the allowance for the spender to the approved amount
-        tokenAllowance[msg.sender][spenderAddress] = approvedAmount;
-
-        // Emit an Approval event to log this approval on the blockchain
-        emit Approval(msg.sender, spenderAddress, approvedAmount);
-        // Return true to indicate the approval was successful
+        require(_spender != address(0)); // Require the spender(metamask like wallet) is not the zero address. This is just a solidity standard.
+        allowance[msg.sender][_spender] = _value; // Sets the amount "_value" to be the allowance of the spender. Stores this value in the "allowance" mapping. It's a mapping because it allows approves the token to go to a thing like ([Alice][100]) 100 tokens allowed to go to Alice.
+        emit Approval(msg.sender, _spender, _value); // Emit the approval event for reference.
         return true;
     }
 
-    // Public function that allows a spender to transfer tokens from an owner's address to another address
-    // This can only be called if the owner has approved the spender to spend at least the transfer amount
+    // 
     function transferFrom(
-        address ownerAddress,
-        address receiverAddress,
-        uint256 transferAmount
+        address _from,
+        address _to,
+        uint256 _value
     )
         public
-        returns (bool transferSuccess)
+        returns (bool success)
     {
-        // Check if the owner has enough tokens to transfer
-        require(transferAmount <= balanceOf[ownerAddress], "Owner has insufficient balance");
-        // Check if the spender is allowed to transfer this amount
-        require(transferAmount <= tokenAllowance[ownerAddress][msg.sender], "Spender has insufficient allowance");
-
-        // Reduce the spender's allowance by the transfer amount
-        tokenAllowance[ownerAddress][msg.sender] = tokenAllowance[ownerAddress][msg.sender] - transferAmount;
-
-        // Call the internal _transfer function to handle the actual transfer logic
-        _transfer(ownerAddress, receiverAddress, transferAmount);
-
-        // Return true to indicate the transfer was successful
+        require(_value <= balanceOf[_from]); // Require the value of the tokens to be less than or equal to the balance of what's available to be purchased. 
+        require(_value <= allowance[_from][msg.sender]); // Require the value of the tokens to be less than of equal to the allowed amount that the spender (like  metamask) is allowed to spend.
+        allowance[_from][msg.sender] -= _value; // Subtract the "_value" from the allowance from the spender. 
+        _transfer(_from, _to, _value); //This calls the internal "_transfer" function. It works by passing in the "_from" address, the "_to" address, and the "_value"arguments into the "_transfer" function.
         return true;
-    }
+    } 
+    
 }
-
-
-/*
-Contract Structure Overview
-State Variables Section (Lines 8-24)
-
-This section defines the core data storage for the token including
-the token name, symbol, decimal places, total supply, and balance tracking.
-Contains mappings that store token balances and allowances for each address.
-
-
-Events Section (Lines 26-40)
-This section defines the events that will be emitted during token transfers and approvals.
-These events allow external applications to track token movements on the blockchain.
-
-
-
-Constructor Section (Lines 42-55)
-This section initializes the token when the contract is deployed.
-Sets the token name, symbol, calculates the total supply with decimals, and assigns all tokens to the deployer.
-Transfer Functions Section (Lines 57-78)
-This section contains the public transfer function and internal _transfer function.
-Allows users to send tokens directly to another address.
-The internal function handles the actual balance updates and event emission.
-
-
-Approval Function Section (Lines 80-96)
-This section contains the approve function.
-Allows users to authorize another address (a spender) to transfer tokens on their behalf.
-Sets allowances in the tokenAllowance mapping.
-
-
-TransferFrom Function Section (Lines 98-121)
-This section contains the transferFrom function.
-Enables approved spenders to transfer tokens between addresses.
-Checks allowances, updates balances, and reduces the spender's allowance after use.
-
-
-This contract implements the core functionality of the ERC-20 token standard, 
-providing the basic mechanisms for token transfers and approvals. 
-It's well-structured with clear separation of concerns between different token operations.
-*/
