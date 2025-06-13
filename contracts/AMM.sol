@@ -102,6 +102,24 @@ contract AutomatedMarketMaker {
         requiredSecondTokenAmount = (secondTokenReserve * _firstTokenAmount) / firstTokenReserve; // Calculates the amount of secondToken that is required to be deposited to maintain the current pool ratio.
     }
 
+    function calculateTokenSwap(uint256 _firstTokenAmount) public view // View Function to see how many tokens you would receive if you swapped a certain amount of firstToken.
+    returns (uint256 secondTokenOut) 
+    {
+        uint256 firstTokenAfterSwap = firstTokenReserve + _firstTokenAmount; // Calculates the amount of firstToken in the pool after the swap.
+        uint256 secondTokenAfterSwap = constantProductK / firstTokenAfterSwap; // Calculates the amount of secondToken in the pool after the swap.
+        secondTokenOut = secondTokenReserve - secondTokenAfterSwap; // Calculates the amount of secondToken that will be given to the user after the swap.
+
+        // Safety check to not drain the whole pool
+        if (secondTokenOut == secondTokenReserve) {
+            secondTokenOut--; // Subtracts an extra one token if the tokenB is equal to the amount of tokenB in the pool
+        }
+
+        require(secondTokenOut < secondTokenReserve, "Swap amount too large for pool reserves"); // Requires that the amount of secondToken that will be given to the user is less than the amount of secondToken in the pool.
+
+    }
+
+    function 
+
 
         
 
