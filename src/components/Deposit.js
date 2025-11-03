@@ -38,18 +38,18 @@ const Deposit = () => {
       setToken1Amount(e.target.value)
 
       // Fetch value from chain
-      const _token1Amount = ethers.utils.parseUnits(e.target.value, 'ether')
+      const _token1Amount = ethers.parseUnits(e.target.value, 'ether')
       const result = await amm.calculateToken2Deposit(_token1Amount)
-      const _token2Amount = ethers.utils.formatUnits(result.toString(), 'ether')
+      const _token2Amount = ethers.formatUnits(result.toString(), 'ether')
 
       setToken2Amount(_token2Amount)
     } else {
       setToken2Amount(e.target.value)
 
       // Fetch value from chain
-      const _token2Amount = ethers.utils.parseUnits(e.target.value, 'ether')
+      const _token2Amount = ethers.parseUnits(e.target.value, 'ether')
       const result = await amm.calculateToken1Deposit(_token2Amount)
-      const _token1Amount = ethers.utils.formatUnits(result.toString(), 'ether')
+      const _token1Amount = ethers.formatUnits(result.toString(), 'ether')
 
       setToken1Amount(_token1Amount)
     }
@@ -60,8 +60,8 @@ const Deposit = () => {
 
     setShowAlert(false)
 
-    const _token1Amount = ethers.utils.parseUnits(token1Amount, 'ether')
-    const _token2Amount = ethers.utils.parseUnits(token2Amount, 'ether')
+    const _token1Amount = ethers.parseUnits(token1Amount, 'ether')
+    const _token2Amount = ethers.parseUnits(token2Amount, 'ether')
 
     await addLiquidity(
       provider,

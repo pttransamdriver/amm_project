@@ -55,18 +55,18 @@ const Swap = () => {
     if (inputToken === 'DAPP') {
       setInputAmount(e.target.value)
 
-      const _token1Amount = ethers.utils.parseUnits(e.target.value, 'ether')
+      const _token1Amount = ethers.parseUnits(e.target.value, 'ether')
       const result = await amm.calculateToken1Swap(_token1Amount)
-      const _token2Amount = ethers.utils.formatUnits(result.toString(), 'ether')
+      const _token2Amount = ethers.formatUnits(result.toString(), 'ether')
 
       setOutputAmount(_token2Amount.toString())
 
     } else {
       setInputAmount(e.target.value)
 
-      const _token2Amount = ethers.utils.parseUnits(e.target.value, 'ether')
+      const _token2Amount = ethers.parseUnits(e.target.value, 'ether')
       const result = await amm.calculateToken2Swap(_token2Amount)
-      const _token1Amount = ethers.utils.formatUnits(result.toString(), 'ether')
+      const _token1Amount = ethers.formatUnits(result.toString(), 'ether')
 
       setOutputAmount(_token1Amount.toString())
     }
@@ -83,7 +83,7 @@ const Swap = () => {
       return
     }
 
-    const _inputAmount = ethers.utils.parseUnits(inputAmount, 'ether')
+    const _inputAmount = ethers.parseUnits(inputAmount, 'ether')
 
     // Swap token depending upon which one we're doing...
     if (inputToken === "DAPP") {

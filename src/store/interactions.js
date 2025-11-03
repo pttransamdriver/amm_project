@@ -32,22 +32,22 @@ import AMM_ABI from '../abis/AMM.json';
 import config from '../config.json';
 
 export const loadProvider = (dispatch) => {
-  const provider = new ethers.providers.Web3Provider(window.ethereum)
+  const provider = new ethers.BrowserProvider(window.ethereum)
   dispatch(setProvider(provider))
 
   return provider
 }
 
 export const loadNetwork = async (provider, dispatch) => {
-  const { chainId } = await provider.getNetwork()
-  dispatch(setNetwork(chainId))
+  const network = await provider.getNetwork()
+  dispatch(setNetwork(Number(network.chainId)))
 
-  return chainId
+  return Number(network.chainId)
 }
 
 export const loadAccount = async (dispatch) => {
   const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' })
-  const account = ethers.utils.getAddress(accounts[0])
+  const account = ethers.getAddress(accounts[0])
   dispatch(setAccount(account))
 
   return account
@@ -79,12 +79,12 @@ export const loadBalances = async (amm, tokens, account, dispatch) => {
   const balance2 = await tokens[1].balanceOf(account)
 
   dispatch(balancesLoaded([
-    ethers.utils.formatUnits(balance1.toString(), 'ether'),
-    ethers.utils.formatUnits(balance2.toString(), 'ether')
+    ethers.formatUnits(balance1.toString(), 'ether'),
+    ethers.formatUnits(balance2.toString(), 'ether')
   ]))
 
   const shares = await amm.shares(account)
-  dispatch(sharesLoaded(ethers.utils.formatUnits(shares.toString(), 'ether')))
+  dispatch(sharesLoaded(ethers.formatUnits(shares.toString(), 'ether')))
 }
 
 

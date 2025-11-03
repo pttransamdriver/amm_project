@@ -4,7 +4,7 @@ const { ethers } = require('hardhat'); // Ethers.js is the library used to inter
 
 // Helper function to convert numbers to wei (smallest unit of ether)
 const tokens = (n) => {
-  return ethers.utils.parseUnits(n.toString(), 'ether') // Converts a number to wei format (18 decimals). For example, tokens(1) = 1000000000000000000 wei = 1 ether
+  return ethers.parseUnits(n.toString(), 'ether') // Converts a number to wei format (18 decimals). For example, tokens(1) = 1000000000000000000 wei = 1 ether
 }
 
 // Create aliases for the tokens function to make code more readable
@@ -56,7 +56,7 @@ describe('AMM', () => {
 
     // Deploy AMM Contract - Create the Automated Market Maker with the two tokens
     const AMM = await ethers.getContractFactory('AutomatedMarketMaker') // Get the AMM contract factory (note: contract name is 'AutomatedMarketMaker')
-    amm = await AMM.deploy(token1.address, token2.address) // Deploy AMM with addresses of the two tokens as constructor parameters
+    amm = await AMM.deploy(await token1.getAddress(), await token2.getAddress()) // Deploy AMM with addresses of the two tokens as constructor parameters
   })
 
   // Test suite for contract deployment verification
@@ -64,17 +64,17 @@ describe('AMM', () => {
 
     // Test 1: Verify that the AMM contract was deployed successfully and has a valid address
     it('has an address', async () => {
-      expect(amm.address).to.not.equal(0x0) // Check that the contract address is not the zero address (0x0000...0000)
+      expect(await amm.getAddress()).to.not.equal(ethers.ZeroAddress) // Check that the contract address is not the zero address
     })
 
     // Test 2: Verify that the AMM contract correctly stores the first token address
     it('tracks firstToken address', async () => {
-      expect(await amm.firstToken()).to.equal(token1.address) // Check that the firstToken state variable matches the deployed token1 address
+      expect(await amm.firstToken()).to.equal(await token1.getAddress()) // Check that the firstToken state variable matches the deployed token1 address
     })
 
     // Test 3: Verify that the AMM contract correctly stores the second token address
     it('tracks secondToken address', async () => {
-      expect(await amm.secondToken()).to.equal(token2.address) // Check that the secondToken state variable matches the deployed token2 address
+      expect(await amm.secondToken()).to.equal(await token2.getAddress()) // Check that the secondToken state variable matches the deployed token2 address
     })
 
   })
@@ -87,10 +87,10 @@ describe('AMM', () => {
       // STEP 1: INITIAL LIQUIDITY PROVISION
       // Deployer approves 100k tokens for the AMM contract to spend
       amount = tokens(100000) // Set amount to 100,000 tokens (in wei format)
-      transaction = await token1.connect(deployer).approve(amm.address, amount) // Approve AMM to spend 100k DAPP tokens from deployer
+      transaction = await token1.connect(deployer).approve(await amm.getAddress(), amount) // Approve AMM to spend 100k DAPP tokens from deployer
       await transaction.wait() // Wait for approval transaction to be mined
 
-      transaction = await token2.connect(deployer).approve(amm.address, amount) // Approve AMM to spend 100k USD tokens from deployer
+      transaction = await token2.connect(deployer).approve(await amm.getAddress(), amount) // Approve AMM to spend 100k USD tokens from deployer
       await transaction.wait() // Wait for approval transaction to be mined
 
       // Deployer adds initial liquidity to the pool (100k of each token)
@@ -99,8 +99,8 @@ describe('AMM', () => {
 
       // STEP 2: VERIFY INITIAL LIQUIDITY PROVISION
       // Check that the AMM contract received the tokens
-      expect(await token1.balanceOf(amm.address)).to.equal(amount) // Verify AMM contract holds 100k DAPP tokens
-      expect(await token2.balanceOf(amm.address)).to.equal(amount) // Verify AMM contract holds 100k USD tokens
+      expect(await token1.balanceOf(await amm.getAddress())).to.equal(amount) // Verify AMM contract holds 100k DAPP tokens
+      expect(await token2.balanceOf(await amm.getAddress())).to.equal(amount) // Verify AMM contract holds 100k USD tokens
 
       // Check that the AMM's internal accounting matches the actual token balances
       expect(await amm.firstTokenReserve()).to.equal(amount) // Verify firstTokenReserve state variable equals 100k
@@ -120,10 +120,10 @@ describe('AMM', () => {
 
       // LP (Liquidity Provider) approves 50k tokens for the AMM to spend
       amount = tokens(50000) // Set amount to 50,000 tokens
-      transaction = await token1.connect(liquidityProvider).approve(amm.address, amount) // LP approves AMM to spend 50k DAPP tokens
+      transaction = await token1.connect(liquidityProvider).approve(await amm.getAddress(), amount) // LP approves AMM to spend 50k DAPP tokens
       await transaction.wait() // Wait for approval transaction
 
-      transaction = await token2.connect(liquidityProvider).approve(amm.address, amount) // LP approves AMM to spend 50k USD tokens
+      transaction = await token2.connect(liquidityProvider).approve(await amm.getAddress(), amount) // LP approves AMM to spend 50k USD tokens
       await transaction.wait() // Wait for approval transaction
 
       // Calculate the required amount of secondToken to maintain pool ratio
@@ -152,16 +152,16 @@ describe('AMM', () => {
       console.log(`Price: ${await amm.secondTokenReserve() / await amm.firstTokenReserve()} \n`) // Price = secondToken/firstToken ratio
 
       // Investor1 approves the AMM to spend their tokens for swapping
-      transaction = await token1.connect(investor1).approve(amm.address, tokens(100000)) // Approve AMM to spend up to 100k DAPP tokens
+      transaction = await token1.connect(investor1).approve(await amm.getAddress(), tokens(100000)) // Approve AMM to spend up to 100k DAPP tokens
       await transaction.wait() // Wait for approval transaction
 
       // Check and log investor1's secondToken balance before the swap
       balance = await token2.balanceOf(investor1.address) // Get investor1's current USD token balance
-      console.log(`Investor1 Token2 balance before swap: ${ethers.utils.formatEther(balance)}\n`) // Log balance in human-readable format
+      console.log(`Investor1 Token2 balance before swap: ${ethers.formatEther(balance)}\n`) // Log balance in human-readable format
 
       // Calculate how many secondTokens investor1 will receive for swapping 1 firstToken
       estimate = await amm.calculateFirstTokenSwap(tokens(1)) // Calculate output amount including 0.3% fee and slippage
-      console.log(`Token2 amount investor1 will receive after swap: ${ethers.utils.formatEther(estimate)}\n`) // Log expected output
+      console.log(`Token2 amount investor1 will receive after swap: ${ethers.formatEther(estimate)}\n`) // Log expected output
 
       // Investor1 executes the swap: 1 DAPP token for USD tokens
       transaction = await amm.connect(investor1).swapFirstToken(tokens(1)) // Call swapFirstToken function with 1 DAPP token
@@ -183,12 +183,12 @@ describe('AMM', () => {
       // STEP 6: VERIFY FIRST SWAP RESULTS
       // Check and log investor1's secondToken balance after the swap
       balance = await token2.balanceOf(investor1.address) // Get investor1's new USD token balance
-      console.log(`Investor1 Token2 balance after swap: ${ethers.utils.formatEther(balance)}\n`) // Log new balance
+      console.log(`Investor1 Token2 balance after swap: ${ethers.formatEther(balance)}\n`) // Log new balance
       expect(estimate).to.equal(balance) // Verify that the actual received amount matches the calculated estimate
 
       // Verify that AMM's internal accounting matches actual token balances
-      expect(await token1.balanceOf(amm.address)).to.equal(await amm.firstTokenReserve()) // AMM's DAPP token balance should match firstTokenReserve
-      expect(await token2.balanceOf(amm.address)).to.equal(await amm.secondTokenReserve()) // AMM's USD token balance should match secondTokenReserve
+      expect(await token1.balanceOf(await amm.getAddress())).to.equal(await amm.firstTokenReserve()) // AMM's DAPP token balance should match firstTokenReserve
+      expect(await token2.balanceOf(await amm.getAddress())).to.equal(await amm.secondTokenReserve()) // AMM's USD token balance should match secondTokenReserve
 
       // Check and log the new price ratio after the swap
       console.log(`Price: ${await amm.secondTokenReserve() / await amm.firstTokenReserve()} \n`) // Price should have changed due to the swap
@@ -200,11 +200,11 @@ describe('AMM', () => {
 
       // Test another swap to demonstrate how repeated swaps affect price and slippage
       balance = await token2.balanceOf(investor1.address) // Get current USD token balance
-      console.log(`Investor1 Token2 balance before swap: ${ethers.utils.formatEther(balance)}`) // Log balance before second swap
+      console.log(`Investor1 Token2 balance before swap: ${ethers.formatEther(balance)}`) // Log balance before second swap
 
       // Calculate expected output for another 1 DAPP token swap (price should be different now)
       estimate = await amm.calculateFirstTokenSwap(tokens(1)) // Calculate output with current pool state
-      console.log(`Token2 Amount investor1 will receive after swap: ${ethers.utils.formatEther(estimate)}`) // Log expected output (should be less than first swap)
+      console.log(`Token2 Amount investor1 will receive after swap: ${ethers.formatEther(estimate)}`) // Log expected output (should be less than first swap)
 
       // Execute the second swap of 1 DAPP token
       transaction = await amm.connect(investor1).swapFirstToken(tokens(1)) // Swap another 1 DAPP token
@@ -212,11 +212,11 @@ describe('AMM', () => {
 
       // Check and log investor1's balance after the second swap
       balance = await token2.balanceOf(investor1.address) // Get new USD token balance
-      console.log(`Investor1 Token2 balance after swap: ${ethers.utils.formatEther(balance)} \n`) // Log new balance
+      console.log(`Investor1 Token2 balance after swap: ${ethers.formatEther(balance)} \n`) // Log new balance
 
       // Verify AMM's internal accounting remains accurate
-      expect(await token1.balanceOf(amm.address)).to.equal(await amm.firstTokenReserve()) // Check DAPP token balance consistency
-      expect(await token2.balanceOf(amm.address)).to.equal(await amm.secondTokenReserve()) // Check USD token balance consistency
+      expect(await token1.balanceOf(await amm.getAddress())).to.equal(await amm.firstTokenReserve()) // Check DAPP token balance consistency
+      expect(await token2.balanceOf(await amm.getAddress())).to.equal(await amm.secondTokenReserve()) // Check USD token balance consistency
 
       // Check and log the price after the second swap (should show further price movement)
       console.log(`Price: ${await amm.secondTokenReserve() / await amm.firstTokenReserve()} \n`) // Price continues to change with each swap
@@ -227,11 +227,11 @@ describe('AMM', () => {
 
       // Test a large swap to demonstrate significant price impact and slippage
       balance = await token2.balanceOf(investor1.address) // Get current USD token balance
-      console.log(`Investor1 Token2 balance before swap: ${ethers.utils.formatEther(balance)}`) // Log balance before large swap
+      console.log(`Investor1 Token2 balance before swap: ${ethers.formatEther(balance)}`) // Log balance before large swap
 
       // Calculate expected output for a large 100 DAPP token swap (will show significant slippage)
       estimate = await amm.calculateFirstTokenSwap(tokens(100)) // Calculate output for 100 DAPP tokens
-      console.log(`Token2 Amount investor1 will receive after swap: ${ethers.utils.formatEther(estimate)}`) // Log expected output (much less than 100 due to slippage)
+      console.log(`Token2 Amount investor1 will receive after swap: ${ethers.formatEther(estimate)}`) // Log expected output (much less than 100 due to slippage)
 
       // Execute the large swap of 100 DAPP tokens
       transaction = await amm.connect(investor1).swapFirstToken(tokens(100)) // Swap 100 DAPP tokens at once
@@ -239,11 +239,11 @@ describe('AMM', () => {
 
       // Check and log investor1's balance after the large swap
       balance = await token2.balanceOf(investor1.address) // Get new USD token balance
-      console.log(`Investor1 Token2 balance after swap: ${ethers.utils.formatEther(balance)} \n`) // Log new balance
+      console.log(`Investor1 Token2 balance after swap: ${ethers.formatEther(balance)} \n`) // Log new balance
 
       // Verify AMM's internal accounting remains accurate after large swap
-      expect(await token1.balanceOf(amm.address)).to.equal(await amm.firstTokenReserve()) // Check DAPP token balance consistency
-      expect(await token2.balanceOf(amm.address)).to.equal(await amm.secondTokenReserve()) // Check USD token balance consistency
+      expect(await token1.balanceOf(await amm.getAddress())).to.equal(await amm.firstTokenReserve()) // Check DAPP token balance consistency
+      expect(await token2.balanceOf(await amm.getAddress())).to.equal(await amm.secondTokenReserve()) // Check USD token balance consistency
 
       // Check and log the price after the large swap (should show dramatic price movement)
       console.log(`Price: ${await amm.secondTokenReserve() / await amm.firstTokenReserve()} \n`) // Price significantly changed due to large swap
@@ -253,16 +253,16 @@ describe('AMM', () => {
       /////////////////////////////////////////////////////////////
 
       // Test swapping in the opposite direction (secondToken for firstToken)
-      transaction = await token2.connect(investor2).approve(amm.address, tokens(100000)) // Investor2 approves AMM to spend USD tokens
+      transaction = await token2.connect(investor2).approve(await amm.getAddress(), tokens(100000)) // Investor2 approves AMM to spend USD tokens
       await transaction.wait() // Wait for approval
 
       // Check and log investor2's firstToken balance before swap
       balance = await token1.balanceOf(investor2.address) // Get investor2's current DAPP token balance (should be 0)
-      console.log(`Investor2 Token1 balance before swap: ${ethers.utils.formatEther(balance)}`) // Log balance
+      console.log(`Investor2 Token1 balance before swap: ${ethers.formatEther(balance)}`) // Log balance
 
       // Calculate expected output for swapping 1 USD token for DAPP tokens
       estimate = await amm.calculateSecondTokenSwap(tokens(1)) // Calculate how many DAPP tokens for 1 USD token
-      console.log(`Token1 Amount investor2 will receive after swap: ${ethers.utils.formatEther(estimate)}`) // Log expected output
+      console.log(`Token1 Amount investor2 will receive after swap: ${ethers.formatEther(estimate)}`) // Log expected output
 
       // Investor2 executes the swap: 1 USD token for DAPP tokens
       transaction = await amm.connect(investor2).swapSecondToken(tokens(1)) // Call swapSecondToken function
@@ -283,7 +283,7 @@ describe('AMM', () => {
 
       // Check and log investor2's firstToken balance after swap
       balance = await token1.balanceOf(investor2.address) // Get investor2's new DAPP token balance
-      console.log(`Investor2 Token1 balance after swap: ${ethers.utils.formatEther(balance)} \n`) // Log new balance
+      console.log(`Investor2 Token1 balance after swap: ${ethers.formatEther(balance)} \n`) // Log new balance
       expect(estimate).to.equal(balance) // Verify actual received amount matches estimate
 
       /////////////////////////////////////////////////////////////
@@ -291,15 +291,15 @@ describe('AMM', () => {
       /////////////////////////////////////////////////////////////
 
       // Log current AMM pool balances before liquidity removal
-      console.log(`AMM Token1 Balance: ${ethers.utils.formatEther(await amm.firstTokenReserve())} \n`) // Log current DAPP token reserve
-      console.log(`AMM Token2 Balance: ${ethers.utils.formatEther(await amm.secondTokenReserve())} \n`) // Log current USD token reserve
+      console.log(`AMM Token1 Balance: ${ethers.formatEther(await amm.firstTokenReserve())} \n`) // Log current DAPP token reserve
+      console.log(`AMM Token2 Balance: ${ethers.formatEther(await amm.secondTokenReserve())} \n`) // Log current USD token reserve
 
       // Check and log LP's token balances before removing liquidity
       balance = await token1.balanceOf(liquidityProvider.address) // Get LP's DAPP token balance
-      console.log(`Liquidity Provider Token1 balance before removing funds: ${ethers.utils.formatEther(balance)} \n`) // Log LP's DAPP balance
+      console.log(`Liquidity Provider Token1 balance before removing funds: ${ethers.formatEther(balance)} \n`) // Log LP's DAPP balance
 
       balance = await token2.balanceOf(liquidityProvider.address) // Get LP's USD token balance
-      console.log(`Liquidity Provider Token2 balance before removing funds: ${ethers.utils.formatEther(balance)} \n`) // Log LP's USD balance
+      console.log(`Liquidity Provider Token2 balance before removing funds: ${ethers.formatEther(balance)} \n`) // Log LP's USD balance
 
       // LP removes all their liquidity from the AMM pool (50 shares)
       transaction = await amm.connect(liquidityProvider).removeLiquidity(shares(50)) // Remove all 50 shares that LP owns
@@ -307,10 +307,10 @@ describe('AMM', () => {
 
       // Check and log LP's token balances after removing liquidity
       balance = await token1.balanceOf(liquidityProvider.address) // Get LP's new DAPP token balance
-      console.log(`Liquidity Provider Token1 balance after removing fund: ${ethers.utils.formatEther(balance)} \n`) // Log new DAPP balance
+      console.log(`Liquidity Provider Token1 balance after removing fund: ${ethers.formatEther(balance)} \n`) // Log new DAPP balance
 
       balance = await token2.balanceOf(liquidityProvider.address) // Get LP's new USD token balance
-      console.log(`Liquidity Provider Token2 balance after removing fund: ${ethers.utils.formatEther(balance)} \n`) // Log new USD balance
+      console.log(`Liquidity Provider Token2 balance after removing fund: ${ethers.formatEther(balance)} \n`) // Log new USD balance
 
       // STEP 11: VERIFY LIQUIDITY REMOVAL RESULTS
       // LP should have 0 shares after removing all liquidity

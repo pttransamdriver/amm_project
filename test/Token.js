@@ -4,7 +4,7 @@ const { ethers } = require('hardhat'); // Ethers.js library for interacting with
 
 // Helper function to convert numbers to wei format (18 decimal places)
 const tokens = (n) => {
-  return ethers.utils.parseUnits(n.toString(), 'ether') // Converts human-readable numbers to wei. Example: tokens(100) = 100000000000000000000 wei
+  return ethers.parseUnits(n.toString(), 'ether') // Converts human-readable numbers to wei. Example: tokens(100) = 100000000000000000000 wei
 }
 
 // Create an alias for the tokens function for better code readability
@@ -136,13 +136,12 @@ describe('Token', () => {
 
       // Test 2: Verify that an Approval event is emitted with correct parameters
       it('emits an Approval event', async () => {
-        const event = result.events[0] // Get the first event from the transaction receipt
-        expect(event.event).to.equal('Approval') // Verify the event name is 'Approval'
-
-        const args = event.args // Get the event arguments
-        expect(args.owner).to.equal(deployer.address) // Verify 'owner' parameter is deployer's address
-        expect(args.spender).to.equal(exchange.address) // Verify 'spender' parameter is exchange's address
-        expect(args.value).to.equal(amount) // Verify 'value' parameter is the approved amount
+        const events = await token.queryFilter(token.filters.Approval(), result.blockNumber, result.blockNumber)
+        expect(events.length).to.be.greaterThan(0)
+        const event = events[0]
+        expect(event.args.owner).to.equal(deployer.address)
+        expect(event.args.spender).to.equal(exchange.address)
+        expect(event.args.value).to.equal(amount)
       })
 
     })
@@ -180,7 +179,7 @@ describe('Token', () => {
 
       // Test 1: Verify that token balances are updated correctly after delegated transfer
       it('transfers token balances', async () => {
-        expect(await token.balanceOf(deployer.address)).to.be.equal(ethers.utils.parseUnits('999900', 'ether')) // Deployer should have 999,900 tokens left
+        expect(await token.balanceOf(deployer.address)).to.be.equal(ethers.parseUnits('999900', 'ether')) // Deployer should have 999,900 tokens left
         expect(await token.balanceOf(receiver.address)).to.be.equal(amount) // Receiver should have 100 tokens
       })
 
@@ -191,13 +190,12 @@ describe('Token', () => {
 
       // Test 3: Verify that a Transfer event is emitted with correct parameters
       it('emits a Transfer event', async () => {
-        const event = result.events[0] // Get the first event from transaction receipt
-        expect(event.event).to.equal('Transfer') // Verify event name is 'Transfer'
-
-        const args = event.args // Get event arguments
-        expect(args.from).to.equal(deployer.address) // Verify 'from' parameter is deployer's address
-        expect(args.to).to.equal(receiver.address) // Verify 'to' parameter is receiver's address
-        expect(args.value).to.equal(amount) // Verify 'value' parameter is the transferred amount
+        const events = await token.queryFilter(token.filters.Transfer(), result.blockNumber, result.blockNumber)
+        expect(events.length).to.be.greaterThan(0)
+        const event = events[0]
+        expect(event.args.from).to.equal(deployer.address)
+        expect(event.args.to).to.equal(receiver.address)
+        expect(event.args.value).to.equal(amount)
       })
 
     })
