@@ -62,14 +62,6 @@ contract AutomatedMarketMaker {
     );
 
     event FlashLoan(
-        address indexed borrower,
-        address indexed token,
-        uint256 amount,
-        uint256 fee,
-        uint256 timestamp
-    );
-
-    event FlashLoan(
         address indexed receiver,
         address indexed token,
         uint256 amount,
@@ -231,41 +223,6 @@ contract AutomatedMarketMaker {
 
         emit RemoveLiquidity(msg.sender, _sharesToWithdraw, firstTokenAmount, secondTokenAmount, block.timestamp);
     }
-
-    function flashLoan(
-        address token,
-        uint256 amount,
-        bytes calldata data
-    ) external nonReentrant {
-        require(token == address(firstToken) || token == address(secondToken), "Invalid token");
-        
-        uint256 fee = (amount * 5) / 10000; // 0.05% fee
-        uint256 balanceBefore = Token(token).balanceOf(address(this));
-        
-        require(balanceBefore >= amount, "Insufficient liquidity");
-        
-        // Send tokens to borrower
-        Token(token).transfer(msg.sender, amount);
-        
-        // Call borrower's callback
-        IFlashLoanReceiver(msg.sender).executeOperation(token, amount, fee, data);
-        
-        // Check repayment
-        uint256 balanceAfter = Token(token).balanceOf(address(this));
-        require(balanceAfter >= balanceBefore + fee, "Flashloan not repaid");
-        
-        emit FlashLoan(msg.sender, token, amount, fee, block.timestamp);
-    }
-}
-
-interface IFlashLoanReceiver {
-    function executeOperation(
-        address token,
-        uint256 amount,
-        uint256 fee,
-        bytes calldata data
-    ) external;
-}
 
     function calculateFlashLoanFee(uint256 _amount) public pure returns (uint256) {
         return (_amount * FLASHLOAN_FEE_NUMERATOR) / FLASHLOAN_FEE_DENOMINATOR;

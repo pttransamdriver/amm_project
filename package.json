@@ -56,7 +56,7 @@
   "devDependencies": {
     "@uniswap/v3-core": "^1.0.1",
     "@uniswap/v3-periphery": "^1.4.3",
-    "@uniswap/v3-sdk": "^3.10.0",
+    "@uniswap/v3-sdk": "3.8.3",
     "@nomicfoundation/hardhat-chai-matchers": "^2.0.8",
     "@nomicfoundation/hardhat-ethers": "^3.0.8",
     "@nomicfoundation/hardhat-ignition": "^0.15.9",
@@ -73,5 +73,12 @@
     "hardhat-gas-reporter": "^1.0.10",
     "solidity-coverage": "^0.8.14",
     "typechain": "^8.3.2"
+  },
+  "overrides": {
+    "nth-check": "^2.1.1",
+    "postcss": "^8.4.31",
+    "cookie": "^0.7.2",
+    "tmp": "^0.2.3",
+    "webpack-dev-server": "^5.2.1"
   }
 }
