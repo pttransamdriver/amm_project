@@ -10,15 +10,20 @@ import "./IArbitrageStrategy.sol";
  * @notice Executes simple 2-DEX arbitrage: Buy low on DEX A, sell high on DEX B
  * @dev This strategy borrows tokens, swaps on one DEX, then swaps back on another DEX for profit
  */
+// "Contract" is the default visibility for state variables and functions.
+// "SampleArbitrage" is the name of the contract and "IArbitrageStrategy" is the interface it implements.
+// The "IArbitrageStrategy" interface defines the functions that all arbitrage strategies must implement. This is necessary for the FlashLoanHub to interact with the strategy.
 contract SimpleArbitrage is IArbitrageStrategy {
     address public immutable owner;
 
+    // "ArbitrageParams" is a struct that holds the parameters for the arbitrage strategy.
+    // Storage is byte-packed so that the last address and minProfit share a single 32-byte slot.
     struct ArbitrageParams {
         address dexA;
         address dexB;
         address tokenIn;
         address tokenOut;
-        uint256 minProfit;
+        uint96 minProfit; // Fits with address tokenOut in a single storage slot (160 + 96 = 256 bits)
     }
 
     event ArbitrageExecuted(

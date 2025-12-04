@@ -13,6 +13,7 @@ import "./IArbitrageStrategy.sol";
 contract TriangularArbitrage is IArbitrageStrategy {
     address public immutable owner;
 
+    // Storage is byte-packed so that tokenC and minProfit share a single 32-byte slot.
     struct TriangularParams {
         address dex1;
         address dex2;
@@ -20,7 +21,7 @@ contract TriangularArbitrage is IArbitrageStrategy {
         address tokenA;
         address tokenB;
         address tokenC;
-        uint256 minProfit;
+        uint96 minProfit; // Fits with address tokenC (160 + 96 = 256 bits)
     }
 
     event TriangularArbitrageExecuted(

@@ -8,13 +8,11 @@ const hre = require("hardhat");
 const config = require('../src/config.json')
 
 const tokens = (n) => {
-  return ethers.parseUnits(n.toString(), 'ether')
+  return hre.ethers.parseUnits(n.toString(), 'ether')
 }
 
-const ether = tokens
-const shares = ether
-
 async function main() {
+  const { ethers } = hre;
 
   // Fetch accounts
   console.log(`Fetching accounts & network \n`)
@@ -71,8 +69,8 @@ async function main() {
 
   console.log(`Fetching AMM...\n`)
 
-  // Fetch AMM
-  const amm = await ethers.getContractAt('AMM', config[chainId].amm.address)
+  // Fetch AMM (AutomatedMarketMaker contract)
+  const amm = await ethers.getContractAt('AutomatedMarketMaker', config[chainId].amm.address)
   console.log(`AMM fetched: ${await amm.getAddress()}\n`)
 
   transaction = await dapp.connect(deployer).approve(await amm.getAddress(), amount)
@@ -97,7 +95,7 @@ async function main() {
   await transaction.wait()
 
   // Investor swaps 1 token
-  transaction = await amm.connect(investor1).swapToken1(tokens(1))
+  transaction = await amm.connect(investor1).swapFirstToken(tokens(1))
   await transaction.wait()
 
   /////////////////////////////////////////////////////////////
@@ -110,7 +108,7 @@ async function main() {
   await transaction.wait()
 
   // Investor swaps 1 token
-  transaction = await amm.connect(investor2).swapToken2(tokens(1))
+  transaction = await amm.connect(investor2).swapSecondToken(tokens(1))
   await transaction.wait()
 
 
@@ -125,7 +123,7 @@ async function main() {
   await transaction.wait()
 
   // Investor swaps all 10 token
-  transaction = await amm.connect(investor3).swapToken1(tokens(10))
+  transaction = await amm.connect(investor3).swapFirstToken(tokens(10))
   await transaction.wait()
 
   /////////////////////////////////////////////////////////////
@@ -139,7 +137,7 @@ async function main() {
   await transaction.wait()
 
   // Investor swaps all 10 tokens
-  transaction = await amm.connect(investor4).swapToken2(tokens(5))
+  transaction = await amm.connect(investor4).swapSecondToken(tokens(5))
   await transaction.wait()
 
   console.log(`Finished.\n`)
