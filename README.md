@@ -1,10 +1,24 @@
 # 🏦 Automated Market Maker (AMM) DEX
 
-A production-ready decentralized exchange (DEX) built with Solidity and React, featuring advanced security protections, flashloan arbitrage, and a comprehensive trading interface.
+> **A production-ready decentralized exchange showcasing advanced Solidity development, DeFi protocols, and security-first architecture.**
 
 [![Tests](https://img.shields.io/badge/tests-29%20passing-brightgreen)]()
 [![Solidity](https://img.shields.io/badge/solidity-0.8.28-blue)]()
 [![License](https://img.shields.io/badge/license-MIT-green)]()
+[![Security](https://img.shields.io/badge/security-10%20protections-orange)]()
+
+## 📖 About This Project
+
+This is a **proof-of-concept DeFi application** demonstrating expertise in:
+- ✅ Advanced Solidity smart contract development
+- ✅ DeFi protocols (AMM, FlashLoans, Arbitrage)
+- ✅ Security-first development practices
+- ✅ Full-stack blockchain development (Solidity + React)
+- ✅ Comprehensive testing and documentation
+- ✅ Gas optimization techniques
+- ✅ Professional code architecture
+
+**Built to showcase technical skills for blockchain development roles.**
 
 ---
 
@@ -233,21 +247,56 @@ Deployed addresses will be added to `src/config.json` after deployment
 
 ---
 
+## 🎯 Skills Demonstrated
+
+This project showcases proficiency in:
+
+### Blockchain Development
+- **Solidity 0.8.28** - Advanced smart contract development
+- **Hardhat** - Professional development environment
+- **OpenZeppelin** - Security libraries and best practices
+- **Gas Optimization** - Bytecode reduction techniques
+- **Testing** - Comprehensive test coverage (29 tests)
+
+### DeFi Protocols
+- **AMM (Automated Market Maker)** - Constant product formula (x * y = k)
+- **FlashLoans** - Uncollateralized lending protocols
+- **Arbitrage Strategies** - Cross-DEX profit opportunities
+- **Liquidity Pools** - LP token mechanics
+- **Multi-DEX Integration** - Uniswap V3, Aave V3, Balancer V2
+
+### Security
+- **10 Security Protections** - Production-grade security
+- **Attack Vector Analysis** - Reentrancy, wash trading, price manipulation
+- **Security Testing** - Attack simulation and mitigation
+- **Access Control** - Owner-based permissions
+- **Slippage Protection** - User-defined safety parameters
+
+### Full-Stack Development
+- **React 18** - Modern frontend framework
+- **Redux Toolkit** - State management
+- **Ethers.js v6** - Blockchain interaction
+- **Web3 Integration** - MetaMask wallet connection
+- **Real-time Charts** - ApexCharts data visualization
+
+### Software Engineering
+- **Clean Architecture** - Category-based organization
+- **Documentation** - Comprehensive technical docs
+- **Version Control** - Git best practices
+- **Testing** - Unit, integration, and security tests
+- **CI/CD Ready** - Deployment automation
+
+---
+
 ## 🤝 Contributing
 
-Contributions are welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
+Contributions are welcome! Please see [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
 
 ---
 
 ## 📄 License
 
-MIT License - see LICENSE file for details
+MIT License - see [LICENSE](./LICENSE) file for details
 
 ---
 
@@ -256,6 +305,18 @@ MIT License - see LICENSE file for details
 - **Documentation:** See `docs/` folder
 - **Issues:** Open a GitHub issue
 - **Security:** Report vulnerabilities privately
+
+---
+
+## 👨‍💻 About
+
+This project was built as a **proof-of-concept** to demonstrate advanced blockchain development skills. It showcases:
+- Production-ready code quality
+- Security-first development approach
+- Comprehensive testing and documentation
+- Full-stack DeFi application development
+
+**Perfect for demonstrating technical capabilities to potential employers and collaborators.**
 
 ---
 

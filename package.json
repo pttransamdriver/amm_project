@@ -1,7 +1,8 @@
 {
-  "name": "@dappuniversity/amm",
-  "version": "1.0.0",
-  "description": "Automated Market Maker (AMM) Decentralized Exchange",
+  "name": "amm-dex",
+  "version": "2.0.0",
+  "description": "Production-ready Automated Market Maker (AMM) DEX with FlashLoan Arbitrage and Advanced Security",
+  "keywords": ["defi", "amm", "dex", "ethereum", "solidity", "flashloan", "arbitrage", "blockchain"],
   "private": true,
   "dependencies": {
     "@reduxjs/toolkit": "^2.8.1",
@@ -33,8 +34,12 @@
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
-  "author": "gregory@dappuniversity.com",
-  "license": "ISC",
+  "author": "Your Name",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/amm-dex"
+  },
   "eslintConfig": {
     "extends": [
       "react-app",
