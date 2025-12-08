@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import "../Token.sol";
+import "../core/Token.sol";
 
 contract MockSushiSwapRouter {
     // Mock exchange rate: 1 token = 1.05 of other token (5% better than 1:1)

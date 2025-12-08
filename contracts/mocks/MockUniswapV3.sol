@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import "../Token.sol";
+import "../core/Token.sol";
 
 contract MockUniswapV3Router {
     struct ExactInputSingleParams {

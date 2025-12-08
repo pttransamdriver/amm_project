@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import "../Token.sol";
-import "../AMM.sol";
+import "../core/Token.sol";
+import "../core/AMM.sol";
 import "./IArbitrageStrategy.sol";
 
 /**
