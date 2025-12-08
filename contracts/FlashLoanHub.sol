@@ -31,6 +31,9 @@ contract FlashLoanHub is
     IAavePool public aavePool;
     IBalancerVault public balancerVault;
 
+    // FIX #4: Strategy whitelist for security
+    mapping(address => bool) public approvedStrategies;
+
     struct FlashLoanParams {
         FlashLoanProvider provider;
         address strategy;
@@ -45,6 +48,8 @@ contract FlashLoanHub is
         address indexed strategy,
         bool success
     );
+
+    event StrategyApproved(address indexed strategy, bool approved);
 
     modifier onlyOwner() {
         require(msg.sender == owner, "Not owner");
@@ -69,6 +74,9 @@ contract FlashLoanHub is
         address _strategy,
         bytes calldata _strategyData
     ) external {
+        // FIX #4: Validate strategy is approved
+        require(approvedStrategies[_strategy], "Strategy not approved");
+
         FlashLoanParams memory params = FlashLoanParams({
             provider: _provider,
             strategy: _strategy,
@@ -95,6 +103,9 @@ contract FlashLoanHub is
         address _strategy,
         bytes calldata _strategyData
     ) external {
+        // FIX #4: Validate strategy is approved
+        require(approvedStrategies[_strategy], "Strategy not approved");
+
         FlashLoanParams memory params = FlashLoanParams({
             provider: FlashLoanProvider.UNISWAP_V3,
             strategy: _strategy,
@@ -366,6 +377,47 @@ contract FlashLoanHub is
             }
         }
         return 0;
+    }
+
+    // FIX #4: Strategy whitelist management functions
+    /**
+     * @notice Approve a strategy contract for flashloan execution
+     * @param _strategy Address of the strategy contract to approve
+     */
+    function approveStrategy(address _strategy) external onlyOwner {
+        require(_strategy != address(0), "Invalid strategy address");
+        approvedStrategies[_strategy] = true;
+        emit StrategyApproved(_strategy, true);
+    }
+
+    /**
+     * @notice Revoke approval for a strategy contract
+     * @param _strategy Address of the strategy contract to revoke
+     */
+    function revokeStrategy(address _strategy) external onlyOwner {
+        approvedStrategies[_strategy] = false;
+        emit StrategyApproved(_strategy, false);
+    }
+
+    /**
+     * @notice Batch approve multiple strategies
+     * @param _strategies Array of strategy addresses to approve
+     */
+    function batchApproveStrategies(address[] calldata _strategies) external onlyOwner {
+        for (uint256 i = 0; i < _strategies.length; i++) {
+            require(_strategies[i] != address(0), "Invalid strategy address");
+            approvedStrategies[_strategies[i]] = true;
+            emit StrategyApproved(_strategies[i], true);
+        }
+    }
+
+    /**
+     * @notice Check if a strategy is approved
+     * @param _strategy Address of the strategy to check
+     * @return bool True if strategy is approved
+     */
+    function isStrategyApproved(address _strategy) external view returns (bool) {
+        return approvedStrategies[_strategy];
     }
 
     receive() external payable {}

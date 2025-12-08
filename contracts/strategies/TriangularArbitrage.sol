@@ -52,6 +52,12 @@ contract TriangularArbitrage is IArbitrageStrategy {
 
         require(token == params.tokenA, "Token mismatch");
 
+        // Anti-wash-trading: Ensure all DEXs are different
+        require(params.dex1 != params.dex2, "DEX1 and DEX2 must be different");
+        require(params.dex2 != params.dex3, "DEX2 and DEX3 must be different");
+        require(params.dex1 != params.dex3, "DEX1 and DEX3 must be different");
+        require(params.minProfit > fee, "Min profit must exceed fee");
+
         uint256 balanceBefore = Token(params.tokenA).balanceOf(address(this));
 
         Token(params.tokenA).approve(params.dex1, amount);
@@ -91,15 +97,16 @@ contract TriangularArbitrage is IArbitrageStrategy {
         address tokenIn,
         uint256 amountIn
     ) internal returns (uint256) {
+        uint256 deadline = block.timestamp + 300; // 5 minute deadline
         if (tokenIn == address(dex.firstToken())) {
-            return dex.swapFirstToken(amountIn);
+            return dex.swapFirstToken(amountIn, 0, deadline); // minAmountOut=0 for arbitrage
         } else {
-            return dex.swapSecondToken(amountIn);
+            return dex.swapSecondToken(amountIn, 0, deadline);
         }
     }
 
     function estimateProfit(
-        address token,
+        address,
         uint256 amount,
         bytes calldata data
     ) external view override returns (int256) {

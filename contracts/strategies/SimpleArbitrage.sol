@@ -50,45 +50,61 @@ contract SimpleArbitrage is IArbitrageStrategy {
         bytes calldata data
     ) external override returns (bool) {
         ArbitrageParams memory params = abi.decode(data, (ArbitrageParams));
-        
+
         require(token == params.tokenIn, "Token mismatch");
-        
+
+        // Anti-wash-trading: Prevent same-DEX arbitrage
+        require(params.dexA != params.dexB, "DEXs must be different");
+        require(params.minProfit > fee, "Min profit must exceed fee");
+
         uint256 balanceBefore = Token(params.tokenIn).balanceOf(address(this));
-        
-        AutomatedMarketMaker dexA = AutomatedMarketMaker(params.dexA);
-        AutomatedMarketMaker dexB = AutomatedMarketMaker(params.dexB);
-        
-        Token(params.tokenIn).approve(params.dexA, amount);
-        
-        uint256 amountOut;
-        if (params.tokenIn == address(dexA.firstToken())) {
-            amountOut = dexA.swapFirstToken(amount);
-        } else {
-            amountOut = dexA.swapSecondToken(amount);
-        }
-        
-        Token(params.tokenOut).approve(params.dexB, amountOut);
-        
-        uint256 finalAmount;
-        if (params.tokenOut == address(dexB.firstToken())) {
-            finalAmount = dexB.swapFirstToken(amountOut);
-        } else {
-            finalAmount = dexB.swapSecondToken(amountOut);
-        }
-        
+
+        // Execute arbitrage swaps
+        uint256 finalAmount = _executeArbitrageSwaps(params, amount);
+
+        // Check profitability
         uint256 balanceAfter = Token(params.tokenIn).balanceOf(address(this));
         uint256 profit = balanceAfter - balanceBefore;
-        
+
         require(profit >= params.minProfit, "Insufficient profit");
         require(balanceAfter >= amount + fee, "Cannot repay flashloan");
-        
+
         emit ArbitrageExecuted(params.dexA, params.dexB, amount, finalAmount, profit);
-        
+
         return true;
     }
 
+    function _executeArbitrageSwaps(
+        ArbitrageParams memory params,
+        uint256 amount
+    ) private returns (uint256) {
+        AutomatedMarketMaker dexA = AutomatedMarketMaker(params.dexA);
+        AutomatedMarketMaker dexB = AutomatedMarketMaker(params.dexB);
+
+        Token(params.tokenIn).approve(params.dexA, amount);
+        uint256 deadline = block.timestamp + 300; // 5 minute deadline
+
+        uint256 amountOut;
+        if (params.tokenIn == address(dexA.firstToken())) {
+            amountOut = dexA.swapFirstToken(amount, 0, deadline);
+        } else {
+            amountOut = dexA.swapSecondToken(amount, 0, deadline);
+        }
+
+        Token(params.tokenOut).approve(params.dexB, amountOut);
+
+        uint256 finalAmount;
+        if (params.tokenOut == address(dexB.firstToken())) {
+            finalAmount = dexB.swapFirstToken(amountOut, 0, deadline);
+        } else {
+            finalAmount = dexB.swapSecondToken(amountOut, 0, deadline);
+        }
+
+        return finalAmount;
+    }
+
     function estimateProfit(
-        address token,
+        address,
         uint256 amount,
         bytes calldata data
     ) external view override returns (int256) {

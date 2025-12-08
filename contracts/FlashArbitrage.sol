@@ -91,10 +91,11 @@ contract FlashArbitrage {
         
         // Swap back on our AMM
         Token(tokenB).approve(address(amm), amountOut);
+        uint256 deadline = block.timestamp + 300;
         if (tokenA == address(amm.firstToken())) {
-            amm.swapSecondToken(amountOut);
+            amm.swapSecondToken(amountOut, 0, deadline);
         } else {
-            amm.swapFirstToken(amountOut);
+            amm.swapFirstToken(amountOut, 0, deadline);
         }
     }
     
@@ -116,10 +117,11 @@ contract FlashArbitrage {
         
         // Swap back on our AMM
         Token(tokenB).approve(address(amm), amounts[1]);
+        uint256 deadline2 = block.timestamp + 300;
         if (tokenA == address(amm.firstToken())) {
-            amm.swapSecondToken(amounts[1]);
+            amm.swapSecondToken(amounts[1], 0, deadline2);
         } else {
-            amm.swapFirstToken(amounts[1]);
+            amm.swapFirstToken(amounts[1], 0, deadline2);
         }
     }
     

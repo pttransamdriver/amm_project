@@ -1,6 +1,7 @@
 const hre = require("hardhat");
 
 async function main() {
+  const { ethers } = hre;
   const [deployer] = await ethers.getSigners();
   console.log("Deploying test environment with account:", deployer.address);
 

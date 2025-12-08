@@ -27,6 +27,31 @@ contract AutomatedMarketMaker {
 
     uint8 private locked;
 
+    // Anti-wash-trading protections
+    uint256 public constant MINIMUM_TRADE_AMOUNT = 1000; // Prevents dust trades
+    mapping(address => uint256) public lastTradeBlock;
+    uint256 public constant TRADE_COOLDOWN = 1; // 1 block between trades
+    mapping(address => bool) private activeFlashLoan;
+    uint256 public constant MAX_PRICE_IMPACT = 500; // 5% max (500/10000)
+    mapping(address => bool) public lastTradeDirection; // true = first→second
+
+    struct TradeHistory {
+        uint256 totalVolume;
+        uint256 tradeCount;
+        uint256 lastResetBlock;
+    }
+    mapping(address => TradeHistory) public tradeHistory;
+    uint256 public constant HISTORY_RESET_BLOCKS = 100;
+    uint256 public constant MAX_TRADES_PER_PERIOD = 50;
+
+    // Global price impact limits (FIX #3)
+    uint256 public lastBlockTraded;
+    uint256 public blockTotalPriceImpact;
+    uint256 public constant MAX_BLOCK_PRICE_IMPACT = 1000; // 10% max per block (1000/10000)
+
+    // Minimum liquidity lock (FIX #2)
+    uint256 private constant MINIMUM_LIQUIDITY = 1000;
+
     modifier nonReentrant() {
         require(locked == 0, "No re-entrancy");
         locked = 1;
@@ -69,6 +94,12 @@ contract AutomatedMarketMaker {
         uint256 timestamp
     );
 
+    event SuspiciousActivity(
+        address indexed trader,
+        string reason,
+        uint256 timestamp
+    );
+
     constructor(Token _firstToken, Token _secondToken) {
         firstToken = _firstToken;
         secondToken = _secondToken;
@@ -87,7 +118,24 @@ contract AutomatedMarketMaker {
         uint256 liquiditySharestoMint;
 
         if (totalSharesCirculating == 0) {
-            liquiditySharestoMint = 100 * PRECISION;
+            // FIX #2: Minimum liquidity lock
+            require(_firstTokenAmount >= MINIMUM_LIQUIDITY, "Insufficient initial liquidity for first token");
+            require(_secondTokenAmount >= MINIMUM_LIQUIDITY, "Insufficient initial liquidity for second token");
+
+            // Calculate shares based on geometric mean
+            liquiditySharestoMint = sqrt(_firstTokenAmount * _secondTokenAmount);
+
+            // Permanently lock MINIMUM_LIQUIDITY shares to address(0)
+            // This prevents price manipulation attacks on initial liquidity
+            require(liquiditySharestoMint > MINIMUM_LIQUIDITY, "Initial liquidity too low");
+
+            unchecked {
+                firstTokenReserve += _firstTokenAmount;
+                secondTokenReserve += _secondTokenAmount;
+                totalSharesCirculating = liquiditySharestoMint;
+                userLiquidityShares[address(0)] = MINIMUM_LIQUIDITY;
+                userLiquidityShares[msg.sender] = liquiditySharestoMint - MINIMUM_LIQUIDITY;
+            }
         } else {
             uint256 proportionalSharesFromFirstToken = (totalSharesCirculating * _firstTokenAmount) / firstTokenReserve;
             uint256 proportionalSharesFromSecondToken = (totalSharesCirculating * _secondTokenAmount) / secondTokenReserve;
@@ -97,13 +145,13 @@ contract AutomatedMarketMaker {
                 "Must provide tokens in current pool ratio"
             );
             liquiditySharestoMint = proportionalSharesFromFirstToken;
-        }
 
-        unchecked {
-            firstTokenReserve += _firstTokenAmount;
-            secondTokenReserve += _secondTokenAmount;
-            totalSharesCirculating += liquiditySharestoMint;
-            userLiquidityShares[msg.sender] += liquiditySharestoMint;
+            unchecked {
+                firstTokenReserve += _firstTokenAmount;
+                secondTokenReserve += _secondTokenAmount;
+                totalSharesCirculating += liquiditySharestoMint;
+                userLiquidityShares[msg.sender] += liquiditySharestoMint;
+            }
         }
 
         constantProductK = firstTokenReserve * secondTokenReserve;
@@ -136,8 +184,44 @@ contract AutomatedMarketMaker {
         require(secondTokenOut < secondTokenReserve, "Swap too large");
     }
 
-    function swapFirstToken(uint256 _firstTokenAmount) external nonReentrant returns (uint256 secondTokenOutput) {
+    function swapFirstToken(
+        uint256 _firstTokenAmount,
+        uint256 _minAmountOut,  // FIX #1: Slippage protection
+        uint256 _deadline        // FIX #1: Transaction deadline
+    ) external nonReentrant returns (uint256 secondTokenOutput) {
+        // FIX #1: Check deadline
+        require(block.timestamp <= _deadline, "Transaction expired");
+
+        // Anti-wash-trading protections
+        require(_firstTokenAmount >= MINIMUM_TRADE_AMOUNT, "Trade too small");
+        require(block.number > lastTradeBlock[msg.sender] + TRADE_COOLDOWN, "Trade cooldown active");
+        require(!activeFlashLoan[msg.sender], "Cannot trade during flashloan");
+
+        // Check per-address price impact
+        uint256 priceImpact = (_firstTokenAmount * 10000) / firstTokenReserve;
+        require(priceImpact <= MAX_PRICE_IMPACT, "Price impact too high");
+
+        // FIX #3: Global price impact limit per block
+        if (block.number > lastBlockTraded) {
+            blockTotalPriceImpact = 0;
+            lastBlockTraded = block.number;
+        }
+        blockTotalPriceImpact += priceImpact;
+        require(blockTotalPriceImpact <= MAX_BLOCK_PRICE_IMPACT, "Block price impact exceeded");
+
+        // Prevent immediate reverse trades in same block
+        if (lastTradeBlock[msg.sender] == block.number && !lastTradeDirection[msg.sender]) {
+            emit SuspiciousActivity(msg.sender, "Reverse trade in same block", block.timestamp);
+            revert("No reverse trades in same block");
+        }
+
+        // Record trade
+        _recordTrade(msg.sender, _firstTokenAmount);
+
         secondTokenOutput = calculateFirstTokenSwap(_firstTokenAmount);
+
+        // FIX #1: Slippage protection
+        require(secondTokenOutput >= _minAmountOut, "Slippage tolerance exceeded");
 
         require(firstToken.transferFrom(msg.sender, address(this), _firstTokenAmount), "Transfer failed");
 
@@ -147,6 +231,10 @@ contract AutomatedMarketMaker {
         }
 
         secondToken.transfer(msg.sender, secondTokenOutput);
+
+        // Update tracking
+        lastTradeBlock[msg.sender] = block.number;
+        lastTradeDirection[msg.sender] = true;
 
         emit Swap(
             msg.sender,
@@ -176,8 +264,44 @@ contract AutomatedMarketMaker {
         require(firstTokenOut < firstTokenReserve, "Swap too large");
     }
 
-    function swapSecondToken(uint256 _secondTokenAmount) external nonReentrant returns (uint256 firstTokenOutput) {
+    function swapSecondToken(
+        uint256 _secondTokenAmount,
+        uint256 _minAmountOut,  // FIX #1: Slippage protection
+        uint256 _deadline        // FIX #1: Transaction deadline
+    ) external nonReentrant returns (uint256 firstTokenOutput) {
+        // FIX #1: Check deadline
+        require(block.timestamp <= _deadline, "Transaction expired");
+
+        // Anti-wash-trading protections
+        require(_secondTokenAmount >= MINIMUM_TRADE_AMOUNT, "Trade too small");
+        require(block.number > lastTradeBlock[msg.sender] + TRADE_COOLDOWN, "Trade cooldown active");
+        require(!activeFlashLoan[msg.sender], "Cannot trade during flashloan");
+
+        // Check per-address price impact
+        uint256 priceImpact = (_secondTokenAmount * 10000) / secondTokenReserve;
+        require(priceImpact <= MAX_PRICE_IMPACT, "Price impact too high");
+
+        // FIX #3: Global price impact limit per block
+        if (block.number > lastBlockTraded) {
+            blockTotalPriceImpact = 0;
+            lastBlockTraded = block.number;
+        }
+        blockTotalPriceImpact += priceImpact;
+        require(blockTotalPriceImpact <= MAX_BLOCK_PRICE_IMPACT, "Block price impact exceeded");
+
+        // Prevent immediate reverse trades in same block
+        if (lastTradeBlock[msg.sender] == block.number && lastTradeDirection[msg.sender]) {
+            emit SuspiciousActivity(msg.sender, "Reverse trade in same block", block.timestamp);
+            revert("No reverse trades in same block");
+        }
+
+        // Record trade
+        _recordTrade(msg.sender, _secondTokenAmount);
+
         firstTokenOutput = calculateSecondTokenSwap(_secondTokenAmount);
+
+        // FIX #1: Slippage protection
+        require(firstTokenOutput >= _minAmountOut, "Slippage tolerance exceeded");
 
         require(secondToken.transferFrom(msg.sender, address(this), _secondTokenAmount), "Transfer failed");
 
@@ -187,6 +311,10 @@ contract AutomatedMarketMaker {
         }
 
         firstToken.transfer(msg.sender, firstTokenOutput);
+
+        // Update tracking
+        lastTradeBlock[msg.sender] = block.number;
+        lastTradeDirection[msg.sender] = false;
 
         emit Swap(
             msg.sender,
@@ -234,6 +362,9 @@ contract AutomatedMarketMaker {
         uint256 balanceBefore = firstToken.balanceOf(address(this));
         uint256 fee = calculateFlashLoanFee(_amount);
 
+        // Mark flashloan as active to prevent self-trading
+        activeFlashLoan[msg.sender] = true;
+
         require(firstToken.transfer(msg.sender, _amount), "Flashloan transfer failed");
 
         require(
@@ -255,6 +386,9 @@ contract AutomatedMarketMaker {
             firstTokenReserve += fee;
         }
 
+        // Clear flashloan flag
+        activeFlashLoan[msg.sender] = false;
+
         emit FlashLoan(msg.sender, address(firstToken), _amount, fee, block.timestamp);
     }
 
@@ -263,6 +397,9 @@ contract AutomatedMarketMaker {
 
         uint256 balanceBefore = secondToken.balanceOf(address(this));
         uint256 fee = calculateFlashLoanFee(_amount);
+
+        // Mark flashloan as active to prevent self-trading
+        activeFlashLoan[msg.sender] = true;
 
         require(secondToken.transfer(msg.sender, _amount), "Flashloan transfer failed");
 
@@ -285,6 +422,9 @@ contract AutomatedMarketMaker {
             secondTokenReserve += fee;
         }
 
+        // Clear flashloan flag
+        activeFlashLoan[msg.sender] = false;
+
         emit FlashLoan(msg.sender, address(secondToken), _amount, fee, block.timestamp);
     }
 
@@ -294,5 +434,42 @@ contract AutomatedMarketMaker {
 
     function getMaxFlashLoanSecondToken() external view returns (uint256) {
         return secondTokenReserve;
+    }
+
+    // Internal function to record trade history and detect wash trading
+    function _recordTrade(address trader, uint256 amount) internal {
+        TradeHistory storage history = tradeHistory[trader];
+
+        // Reset history if period expired
+        if (block.number > history.lastResetBlock + HISTORY_RESET_BLOCKS) {
+            history.totalVolume = 0;
+            history.tradeCount = 0;
+            history.lastResetBlock = block.number;
+        }
+
+        unchecked {
+            history.totalVolume += amount;
+            history.tradeCount += 1;
+        }
+
+        // Flag suspicious high-frequency trading
+        if (history.tradeCount > MAX_TRADES_PER_PERIOD) {
+            emit SuspiciousActivity(trader, "Excessive trades in period", block.timestamp);
+            revert("Too many trades in period");
+        }
+    }
+
+    // Babylonian method for square root calculation
+    function sqrt(uint256 y) internal pure returns (uint256 z) {
+        if (y > 3) {
+            z = y;
+            uint256 x = y / 2 + 1;
+            while (x < z) {
+                z = x;
+                x = (y / x + x) / 2;
+            }
+        } else if (y != 0) {
+            z = 1;
+        }
     }
 }

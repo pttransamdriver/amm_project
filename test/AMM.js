@@ -1,6 +1,7 @@
 // Import required testing libraries and utilities
 const { expect } = require('chai'); // Chai is the assertion library used for testing - it provides functions like expect() to check if values match expected results
 const { ethers } = require('hardhat'); // Ethers.js is the library used to interact with Ethereum blockchain and smart contracts
+const { mine } = require('@nomicfoundation/hardhat-network-helpers'); // Helper to mine blocks for testing cooldowns
 
 // Helper function to convert numbers to wei (smallest unit of ether)
 const tokens = (n) => {
@@ -10,6 +11,12 @@ const tokens = (n) => {
 // Create aliases for the tokens function to make code more readable
 const ether = tokens // "ether" is an alias for "tokens" - both do the same thing
 const shares = ether // "shares" is also an alias for "tokens" - used when dealing with liquidity pool shares
+
+// Helper function to get future deadline (1 hour from now)
+const getDeadline = async () => {
+  const block = await ethers.provider.getBlock('latest')
+  return block.timestamp + 3600 // 1 hour from now
+}
 
 // Main test suite for the AMM (Automated Market Maker) contract
 describe('AMM', () => {
@@ -107,10 +114,12 @@ describe('AMM', () => {
       expect(await amm.secondTokenReserve()).to.equal(amount) // Verify secondTokenReserve state variable equals 100k
 
       // Check deployer received the correct amount of liquidity shares
-      expect(await amm.userLiquidityShares(deployer.address)).to.equal(tokens(100)) // Deployer should have 100 shares (100 * 10^18 in wei)
+      // With minimum liquidity lock: sqrt(100000 * 100000) * 10^18 - 1000 = 100000 * 10^18 - 1000
+      const expectedShares = tokens(100000) - 1000n // Geometric mean minus MINIMUM_LIQUIDITY (1000 wei)
+      expect(await amm.userLiquidityShares(deployer.address)).to.equal(expectedShares)
 
-      // Check total shares in the pool
-      expect(await amm.totalSharesCirculating()).to.equal(tokens(100)) // Total pool shares should be 100 (100 * 10^18 in wei)
+      // Check total shares in the pool (includes locked liquidity)
+      expect(await amm.totalSharesCirculating()).to.equal(tokens(100000)) // sqrt(100000 * 100000) = 100000 tokens
 
 
 
@@ -134,14 +143,14 @@ describe('AMM', () => {
       await transaction.wait() // Wait for addLiquidity transaction
 
       // STEP 4: VERIFY SECOND LIQUIDITY PROVISION
-      // LP should have 50 shares (50% of the deployer's initial 100k deposit)
-      expect(await amm.userLiquidityShares(liquidityProvider.address)).to.equal(tokens(50)) // LP gets 50 shares for adding 50% of existing liquidity
+      // LP should have 50000 shares (50% of the deployer's initial 100k deposit)
+      expect(await amm.userLiquidityShares(liquidityProvider.address)).to.equal(tokens(50000)) // LP gets 50000 shares for adding 50% of existing liquidity
 
-      // Deployer should still have 100 shares (unchanged)
-      expect(await amm.userLiquidityShares(deployer.address)).to.equal(tokens(100)) // Deployer's shares remain the same
+      // Deployer should still have 100000 - 1000 shares (unchanged)
+      expect(await amm.userLiquidityShares(deployer.address)).to.equal(expectedShares) // Deployer's shares remain the same
 
-      // Pool should have 150 total shares (100 + 50)
-      expect(await amm.totalSharesCirculating()).to.equal(tokens(150)) // Total shares = deployer's 100 + LP's 50
+      // Pool should have 150000 total shares (100000 + 50000)
+      expect(await amm.totalSharesCirculating()).to.equal(tokens(150000)) // Total shares = deployer's 100000 + LP's 50000
 
 
       /////////////////////////////////////////////////////////////
@@ -164,8 +173,10 @@ describe('AMM', () => {
       console.log(`Token2 amount investor1 will receive after swap: ${ethers.formatEther(estimate)}\n`) // Log expected output
 
       // Investor1 executes the swap: 1 DAPP token for USD tokens
-      transaction = await amm.connect(investor1).swapFirstToken(tokens(1)) // Call swapFirstToken function with 1 DAPP token
-      await transaction.wait() // Wait for swap transaction to be mined
+      const deadline = await getDeadline() // Get deadline 1 hour from now
+      transaction = await amm.connect(investor1).swapFirstToken(tokens(1), 0, deadline) // Call swapFirstToken with minAmountOut=0 (no slippage protection for test) and deadline
+      const receipt = await transaction.wait() // Wait for swap transaction to be mined
+      const swapBlock = await ethers.provider.getBlock(receipt.blockNumber) // Get the block where swap occurred
 
       // Verify that the Swap event was emitted with correct parameters
       await expect(transaction).to.emit(amm, 'Swap') // Check that 'Swap' event was emitted
@@ -177,8 +188,10 @@ describe('AMM', () => {
           estimate, // amount received (calculated estimate)
           await amm.firstTokenReserve(), // new firstToken reserve after swap
           await amm.secondTokenReserve(), // new secondToken reserve after swap
-          (await ethers.provider.getBlock(await ethers.provider.getBlockNumber())).timestamp // timestamp of the block
+          swapBlock.timestamp // timestamp of the block where swap occurred
         )
+
+      await mine(2) // Mine blocks to pass trade cooldown
 
       // STEP 6: VERIFY FIRST SWAP RESULTS
       // Check and log investor1's secondToken balance after the swap
@@ -207,8 +220,10 @@ describe('AMM', () => {
       console.log(`Token2 Amount investor1 will receive after swap: ${ethers.formatEther(estimate)}`) // Log expected output (should be less than first swap)
 
       // Execute the second swap of 1 DAPP token
-      transaction = await amm.connect(investor1).swapFirstToken(tokens(1)) // Swap another 1 DAPP token
+      const deadline2 = await getDeadline() // Get new deadline
+      transaction = await amm.connect(investor1).swapFirstToken(tokens(1), 0, deadline2) // Swap another 1 DAPP token
       await transaction.wait() // Wait for transaction
+      await mine(2) // Mine blocks to pass trade cooldown
 
       // Check and log investor1's balance after the second swap
       balance = await token2.balanceOf(investor1.address) // Get new USD token balance
@@ -234,8 +249,10 @@ describe('AMM', () => {
       console.log(`Token2 Amount investor1 will receive after swap: ${ethers.formatEther(estimate)}`) // Log expected output (much less than 100 due to slippage)
 
       // Execute the large swap of 100 DAPP tokens
-      transaction = await amm.connect(investor1).swapFirstToken(tokens(100)) // Swap 100 DAPP tokens at once
+      const deadline3 = await getDeadline() // Get new deadline
+      transaction = await amm.connect(investor1).swapFirstToken(tokens(100), 0, deadline3) // Swap 100 DAPP tokens at once
       await transaction.wait() // Wait for transaction
+      await mine(2) // Mine blocks to pass trade cooldown
 
       // Check and log investor1's balance after the large swap
       balance = await token2.balanceOf(investor1.address) // Get new USD token balance
@@ -265,7 +282,8 @@ describe('AMM', () => {
       console.log(`Token1 Amount investor2 will receive after swap: ${ethers.formatEther(estimate)}`) // Log expected output
 
       // Investor2 executes the swap: 1 USD token for DAPP tokens
-      transaction = await amm.connect(investor2).swapSecondToken(tokens(1)) // Call swapSecondToken function
+      const deadline4 = await getDeadline() // Get new deadline
+      transaction = await amm.connect(investor2).swapSecondToken(tokens(1), 0, deadline4) // Call swapSecondToken function
       await transaction.wait() // Wait for transaction
 
       // Verify that the Swap event was emitted with correct parameters for reverse swap
@@ -301,8 +319,8 @@ describe('AMM', () => {
       balance = await token2.balanceOf(liquidityProvider.address) // Get LP's USD token balance
       console.log(`Liquidity Provider Token2 balance before removing funds: ${ethers.formatEther(balance)} \n`) // Log LP's USD balance
 
-      // LP removes all their liquidity from the AMM pool (50 shares)
-      transaction = await amm.connect(liquidityProvider).removeLiquidity(shares(50)) // Remove all 50 shares that LP owns
+      // LP removes all their liquidity from the AMM pool (50000 shares)
+      transaction = await amm.connect(liquidityProvider).removeLiquidity(tokens(50000)) // Remove all 50000 shares that LP owns
       await transaction.wait() // Wait for removeLiquidity transaction
 
       // Check and log LP's token balances after removing liquidity
@@ -316,11 +334,11 @@ describe('AMM', () => {
       // LP should have 0 shares after removing all liquidity
       expect(await amm.userLiquidityShares(liquidityProvider.address)).to.equal(0) // LP should have no shares left
 
-      // Deployer should still have 100 shares (unchanged)
-      expect(await amm.userLiquidityShares(deployer.address)).to.equal(shares(100)) // Deployer's shares remain the same
+      // Deployer should still have 100000 - 1000 shares (unchanged)
+      expect(await amm.userLiquidityShares(deployer.address)).to.equal(expectedShares) // Deployer's shares remain the same
 
-      // AMM Pool should have 100 total shares remaining (only deployer's shares)
-      expect(await amm.totalSharesCirculating()).to.equal(shares(100)) // Total shares = 150 - 50 = 100
+      // AMM Pool should have 100000 total shares remaining (only deployer's shares + locked liquidity)
+      expect(await amm.totalSharesCirculating()).to.equal(tokens(100000)) // Total shares = 150000 - 50000 = 100000
 
     })
 
