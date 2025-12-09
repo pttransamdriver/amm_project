@@ -13,18 +13,35 @@ import "../interfaces/IBalancerVault.sol";
  * @notice Aggregates flashloan functionality from multiple DEX protocols
  * @dev Supports Aave V3, Uniswap V3, Balancer V2, and custom AMM flashloans
  */
-contract FlashLoanHub is 
+contract FlashLoanHub is
     IFlashLoanReceiver,
     IFlashLoanSimpleReceiver,
     IUniswapV3FlashCallback,
-    IBalancerFlashLoanRecipient 
+    IBalancerFlashLoanRecipient
 {
+    // ============================================
+    // ENUMS AND STRUCTS
+    // ============================================
+
     enum FlashLoanProvider {
-        CUSTOM_AMM,
-        AAVE_V3,
-        UNISWAP_V3,
-        BALANCER_V2
+        CUSTOM_AMM,      // 0
+        AAVE_V3,         // 1
+        UNISWAP_V3,      // 2
+        BALANCER_V2      // 3
     }
+
+    // Optimized struct - provider is uint8 (enum), packed with address
+    struct FlashLoanParams {
+        address strategy;                // 20 bytes
+        FlashLoanProvider provider;      // 1 byte (enum stored as uint8)
+        // 11 bytes padding
+        bytes strategyData;              // Dynamic, separate slot
+    }
+    // Total: 1 slot for fixed data + dynamic array
+
+    // ============================================
+    // STORAGE VARIABLES
+    // ============================================
 
     address public immutable owner;
     AutomatedMarketMaker public customAMM;
@@ -33,12 +50,6 @@ contract FlashLoanHub is
 
     // FIX #4: Strategy whitelist for security
     mapping(address => bool) public approvedStrategies;
-
-    struct FlashLoanParams {
-        FlashLoanProvider provider;
-        address strategy;
-        bytes strategyData;
-    }
 
     event FlashLoanExecuted(
         FlashLoanProvider indexed provider,
