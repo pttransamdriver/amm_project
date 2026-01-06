@@ -19,6 +19,9 @@ interface ISushiSwapRouter {
 contract PriceOracle {
     IUniswapV3Quoter public constant uniswapQuoter = IUniswapV3Quoter(0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6);
     ISushiSwapRouter public constant sushiRouter = ISushiSwapRouter(0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F);
+    // Simple aggregator state for lightweight TWAP-like behavior
+    uint256 public lastObservedPrice;
+    uint256 public lastObservedTimestamp;
     
     function getUniswapPrice(
         address tokenIn,
@@ -54,11 +57,23 @@ contract PriceOracle {
     ) external returns (uint256 bestPrice, bool useUniswap) {
         uint256 uniPrice = this.getUniswapPrice(tokenIn, tokenOut, amountIn);
         uint256 sushiPrice = this.getSushiPrice(tokenIn, tokenOut, amountIn);
-        
+        // Use simple median/average across multiple oracles to reduce single-source manipulation
+        uint256 averagePrice = (uniPrice + sushiPrice) / 2;
+
+        // Update lightweight observed price (used by clients as a simple TWAP-ish reference)
+        lastObservedPrice = averagePrice;
+        lastObservedTimestamp = block.timestamp;
+
+        // Return average and indicate which oracle currently quotes higher (for diagnostics)
         if (uniPrice > sushiPrice) {
-            return (uniPrice, true);
+            return (averagePrice, true);
         } else {
-            return (sushiPrice, false);
+            return (averagePrice, false);
         }
+    }
+
+    /// @notice Very small helper that returns the last observed aggregated price and timestamp
+    function getLastObserved() external view returns (uint256 price, uint256 timestamp) {
+        return (lastObservedPrice, lastObservedTimestamp);
     }
 }

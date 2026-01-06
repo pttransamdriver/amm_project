@@ -7,6 +7,7 @@ import "./IFlashLoanReceiver.sol";
 import "../interfaces/IAavePool.sol";
 import "../interfaces/IUniswapV3Pool.sol";
 import "../interfaces/IBalancerVault.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 /**
  * @title FlashLoanHub
@@ -17,7 +18,8 @@ contract FlashLoanHub is
     IFlashLoanReceiver,
     IFlashLoanSimpleReceiver,
     IUniswapV3FlashCallback,
-    IBalancerFlashLoanRecipient
+    IBalancerFlashLoanRecipient,
+    ReentrancyGuard
 {
     // ============================================
     // ENUMS AND STRUCTS
@@ -200,7 +202,7 @@ contract FlashLoanHub is
         uint256 premium,
         address initiator,
         bytes calldata params
-    ) external override(IFlashLoanReceiver, IFlashLoanSimpleReceiver) returns (bool) {
+    ) external nonReentrant override(IFlashLoanReceiver, IFlashLoanSimpleReceiver) returns (bool) {
         if (msg.sender == address(customAMM)) {
             FlashLoanParams memory flashParams = abi.decode(params, (FlashLoanParams));
 
@@ -260,7 +262,7 @@ contract FlashLoanHub is
         uint256 fee0,
         uint256 fee1,
         bytes calldata data
-    ) external override {
+    ) external nonReentrant override {
         FlashLoanParams memory flashParams = abi.decode(data, (FlashLoanParams));
         
         IUniswapV3Pool pool = IUniswapV3Pool(msg.sender);
@@ -308,7 +310,7 @@ contract FlashLoanHub is
         uint256[] memory amounts,
         uint256[] memory feeAmounts,
         bytes memory userData
-    ) external override {
+    ) external nonReentrant override {
         require(msg.sender == address(balancerVault), "Invalid caller");
         
         FlashLoanParams memory flashParams = abi.decode(userData, (FlashLoanParams));

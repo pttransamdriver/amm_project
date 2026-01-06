@@ -3,8 +3,9 @@ pragma solidity ^0.8.28;
 
 import "./Token.sol";
 import "../flashloan/IFlashLoanReceiver.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
-contract AutomatedMarketMaker {
+contract AutomatedMarketMaker is ReentrancyGuard {
     // ============================================
     // STORAGE LAYOUT - OPTIMIZED FOR BYTESTACKING
     // ============================================
@@ -37,8 +38,8 @@ contract AutomatedMarketMaker {
     uint64 public blockTotalPriceImpact;      // 8 bytes - cumulative price impact (max 10000)
     uint32 private _reserved1;                // 4 bytes - reserved for future use
     uint16 private _reserved2;                // 2 bytes - reserved for future use
-    uint8 private locked;                     // 1 byte - reentrancy guard
-    bool private _reserved3;                  // 1 byte - reserved for future use
+    // NOTE: ReentrancyGuard adds its own storage `_status`.
+    // `_reserved3` intentionally left out to avoid duplicate storage.
     // Total: 32 bytes (1 slot) ✅
 
     // Mappings (each takes separate slots per key)
@@ -109,12 +110,7 @@ contract AutomatedMarketMaker {
     // MODIFIERS
     // ============================================
 
-    modifier nonReentrant() {
-        require(locked == 0, "No re-entrancy");
-        locked = 1;
-        _;
-        locked = 0;
-    }
+    // Using OpenZeppelin's `nonReentrant` from ReentrancyGuard
 
     // ============================================
     // EVENTS
