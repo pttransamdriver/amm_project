@@ -9,5 +9,16 @@
     "amm": {
       "address": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"
     }
+  },
+  "11155111": {
+    "dapp": {
+      "address": "0x0000000000000000000000000000000000000000" // Placeholder for Patent Pennies Token
+    },
+    "usd": {
+      "address": "0x0000000000000000000000000000000000000000" // Placeholder for USD Token
+    },
+    "amm": {
+      "address": "0x0000000000000000000000000000000000000000" // Placeholder for AMM Contract
+    }
   }
 }

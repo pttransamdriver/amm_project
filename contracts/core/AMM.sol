@@ -227,11 +227,12 @@ contract AutomatedMarketMaker is ReentrancyGuard {
     }
 
     function calculateFirstTokenSwap(uint256 _firstTokenAmount) public view returns (uint256 secondTokenOut) {
-        require(_firstTokenAmount > 0 && constantProductK > 0, "Invalid swap or pool not initialized");
+        require(_firstTokenAmount > 0 && firstTokenReserve > 0 && secondTokenReserve > 0, "Invalid swap or pool not initialized");
 
         uint256 amountInWithFee = (_firstTokenAmount * FEE_NUMERATOR) / FEE_DENOMINATOR;
         uint256 firstTokenAfterSwap = firstTokenReserve + amountInWithFee;
-        uint256 secondTokenAfterSwap = constantProductK / firstTokenAfterSwap;
+        uint256 currentK = firstTokenReserve * secondTokenReserve;
+        uint256 secondTokenAfterSwap = currentK / firstTokenAfterSwap;
         secondTokenOut = secondTokenReserve - secondTokenAfterSwap;
 
         if (secondTokenOut == secondTokenReserve) {
@@ -307,11 +308,12 @@ contract AutomatedMarketMaker is ReentrancyGuard {
 
 
     function calculateSecondTokenSwap(uint256 _secondTokenAmount) public view returns (uint256 firstTokenOut) {
-        require(_secondTokenAmount > 0 && constantProductK > 0, "Invalid swap or pool not initialized");
+        require(_secondTokenAmount > 0 && firstTokenReserve > 0 && secondTokenReserve > 0, "Invalid swap or pool not initialized");
 
         uint256 amountInWithFee = (_secondTokenAmount * FEE_NUMERATOR) / FEE_DENOMINATOR;
         uint256 secondTokenAfterSwap = secondTokenReserve + amountInWithFee;
-        uint256 firstTokenAfterSwap = constantProductK / secondTokenAfterSwap;
+        uint256 currentK = firstTokenReserve * secondTokenReserve;
+        uint256 firstTokenAfterSwap = currentK / secondTokenAfterSwap;
         firstTokenOut = firstTokenReserve - firstTokenAfterSwap;
 
         if (firstTokenOut == firstTokenReserve) {

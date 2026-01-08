@@ -16,6 +16,9 @@ import "./IArbitrageStrategy.sol";
 contract SimpleArbitrage is IArbitrageStrategy {
     address public immutable owner;
 
+    uint256 private constant SLIPPAGE_NUMERATOR = 995; // 0.5% slippage
+    uint256 private constant SLIPPAGE_DENOMINATOR = 1000;
+
     // "ArbitrageParams" is a struct that holds the parameters for the arbitrage strategy.
     // Storage is byte-packed so that the last address and minProfit share a single 32-byte slot.
     struct ArbitrageParams {
@@ -84,20 +87,34 @@ contract SimpleArbitrage is IArbitrageStrategy {
         Token(params.tokenIn).approve(params.dexA, amount);
         uint256 deadline = block.timestamp + 300; // 5 minute deadline
 
+        // Calculate expected output and slippage for the first swap
+        uint256 expectedAmountOut = (params.tokenIn == address(dexA.firstToken()))
+            ? dexA.calculateFirstTokenSwap(amount)
+            : dexA.calculateSecondTokenSwap(amount);
+        
+        uint256 minAmountOut = (expectedAmountOut * SLIPPAGE_NUMERATOR) / SLIPPAGE_DENOMINATOR;
+
         uint256 amountOut;
         if (params.tokenIn == address(dexA.firstToken())) {
-            amountOut = dexA.swapFirstToken(amount, 0, deadline);
+            amountOut = dexA.swapFirstToken(amount, minAmountOut, deadline);
         } else {
-            amountOut = dexA.swapSecondToken(amount, 0, deadline);
+            amountOut = dexA.swapSecondToken(amount, minAmountOut, deadline);
         }
 
         Token(params.tokenOut).approve(params.dexB, amountOut);
 
+        // Calculate expected output and slippage for the second swap
+        uint256 expectedFinalAmount = (params.tokenOut == address(dexB.firstToken()))
+            ? dexB.calculateFirstTokenSwap(amountOut)
+            : dexB.calculateSecondTokenSwap(amountOut);
+
+        uint256 minFinalAmount = (expectedFinalAmount * SLIPPAGE_NUMERATOR) / SLIPPAGE_DENOMINATOR;
+
         uint256 finalAmount;
         if (params.tokenOut == address(dexB.firstToken())) {
-            finalAmount = dexB.swapFirstToken(amountOut, 0, deadline);
+            finalAmount = dexB.swapFirstToken(amountOut, minFinalAmount, deadline);
         } else {
-            finalAmount = dexB.swapSecondToken(amountOut, 0, deadline);
+            finalAmount = dexB.swapSecondToken(amountOut, minFinalAmount, deadline);
         }
 
         return finalAmount;
@@ -138,4 +155,3 @@ contract SimpleArbitrage is IArbitrageStrategy {
 
     receive() external payable {}
 }
-

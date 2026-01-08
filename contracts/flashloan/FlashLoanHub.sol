@@ -63,6 +63,7 @@ contract FlashLoanHub is
     );
 
     event StrategyApproved(address indexed strategy, bool approved);
+    event TokensSwept(address indexed by, address indexed token, uint256 amount);
 
     modifier onlyOwner() {
         require(msg.sender == owner, "Not owner");
@@ -431,6 +432,18 @@ contract FlashLoanHub is
      */
     function isStrategyApproved(address _strategy) external view returns (bool) {
         return approvedStrategies[_strategy];
+    }
+    
+    /**
+     * @notice Allows the owner to withdraw any tokens accidentally sent to this contract
+     * @param _tokenAddress The address of the token to withdraw
+     */
+    function sweepTokens(address _tokenAddress) external onlyOwner {
+        Token token = Token(_tokenAddress);
+        uint256 balance = token.balanceOf(address(this));
+        require(balance > 0, "No tokens to sweep");
+        token.transfer(owner, balance);
+        emit TokensSwept(msg.sender, _tokenAddress, balance);
     }
 
     receive() external payable {}
