@@ -11,9 +11,11 @@ const Charts = () => {
   const amm = useSelector(state => state.amm.contract)
   const dispatch = useDispatch()
 
-  useEffect (() => {
-    loadAllSwaps(provider, amm, dispatch)=
-  } [],)
+  useEffect(() => {
+    if (provider && amm) {
+      loadAllSwaps(provider, amm, dispatch)
+    }
+  }, [provider, amm, dispatch])
 
   return (
     <div>Charts</div>

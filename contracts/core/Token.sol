@@ -29,10 +29,9 @@ contract Token {
 
     function _transfer(address _from, address _to, uint256 _value) internal {
         require(_to != address(0), "Invalid recipient");
-        unchecked {
-            balanceOf[_from] -= _value;
-            balanceOf[_to] += _value;
-        }
+        // FIX Medium#5: Removed unchecked — prevents silent underflow if called from new code paths
+        balanceOf[_from] -= _value;
+        balanceOf[_to] += _value;
         emit Transfer(_from, _to, _value);
     }
 

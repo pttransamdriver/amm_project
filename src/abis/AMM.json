@@ -71,19 +71,6 @@
     "type": "event"
   },
   {
-    "inputs": [],
-    "name": "K",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
     "inputs": [
       {
         "internalType": "uint256",
@@ -248,15 +235,25 @@
     "inputs": [
       {
         "internalType": "uint256",
-        "name": "_token1Amount",
+        "name": "_firstTokenAmount",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_minAmountOut",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_deadline",
         "type": "uint256"
       }
     ],
-    "name": "swapToken1",
+    "name": "swapFirstToken",
     "outputs": [
       {
         "internalType": "uint256",
-        "name": "token2Amount",
+        "name": "secondTokenOutput",
         "type": "uint256"
       }
     ],
@@ -267,15 +264,25 @@
     "inputs": [
       {
         "internalType": "uint256",
-        "name": "_token2Amount",
+        "name": "_secondTokenAmount",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_minAmountOut",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_deadline",
         "type": "uint256"
       }
     ],
-    "name": "swapToken2",
+    "name": "swapSecondToken",
     "outputs": [
       {
         "internalType": "uint256",
-        "name": "token1Amount",
+        "name": "firstTokenOutput",
         "type": "uint256"
       }
     ],

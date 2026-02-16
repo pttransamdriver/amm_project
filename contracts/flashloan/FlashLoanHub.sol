@@ -53,6 +53,10 @@ contract FlashLoanHub is
     // FIX #4: Strategy whitelist for security
     mapping(address => bool) public approvedStrategies;
 
+    // Tracks the legitimate Uniswap V3 pool address during a flash loan,
+    // preventing attackers from calling the callback directly with a fake pool.
+    address private _expectedUniswapV3Pool;
+
     event FlashLoanExecuted(
         FlashLoanProvider indexed provider,
         address indexed token,
@@ -132,13 +136,18 @@ contract FlashLoanHub is
         address token0 = pool.token0();
         address token1 = pool.token1();
 
+        _expectedUniswapV3Pool = _pool;
+
         if (_token == token0) {
             pool.flash(address(this), _amount, 0, encodedParams);
         } else if (_token == token1) {
             pool.flash(address(this), 0, _amount, encodedParams);
         } else {
+            _expectedUniswapV3Pool = address(0);
             revert("Token not in pool");
         }
+
+        _expectedUniswapV3Pool = address(0);
     }
 
     function _executeCustomAMMFlashLoan(
@@ -204,6 +213,8 @@ contract FlashLoanHub is
         address initiator,
         bytes calldata params
     ) external nonReentrant override(IFlashLoanReceiver, IFlashLoanSimpleReceiver) returns (bool) {
+        require(initiator == address(this), "Invalid initiator");
+
         if (msg.sender == address(customAMM)) {
             FlashLoanParams memory flashParams = abi.decode(params, (FlashLoanParams));
 
@@ -264,8 +275,10 @@ contract FlashLoanHub is
         uint256 fee1,
         bytes calldata data
     ) external nonReentrant override {
+        require(msg.sender == _expectedUniswapV3Pool, "Caller is not the expected Uniswap V3 pool");
+
         FlashLoanParams memory flashParams = abi.decode(data, (FlashLoanParams));
-        
+
         IUniswapV3Pool pool = IUniswapV3Pool(msg.sender);
         address token0 = pool.token0();
         address token1 = pool.token1();
@@ -292,9 +305,8 @@ contract FlashLoanHub is
             flashParams.strategyData
         );
 
-        if (success) {
-            Token(token).transfer(msg.sender, amount + fee);
-        }
+        require(success, "Strategy execution failed");
+        require(Token(token).transfer(msg.sender, amount + fee), "Flash loan repayment failed");
 
         emit FlashLoanExecuted(
             FlashLoanProvider.UNISWAP_V3,
@@ -324,9 +336,8 @@ contract FlashLoanHub is
             flashParams.strategyData
         );
 
-        if (success) {
-            Token(tokens[0]).transfer(msg.sender, amounts[0] + feeAmounts[0]);
-        }
+        require(success, "Strategy execution failed");
+        require(Token(tokens[0]).transfer(msg.sender, amounts[0] + feeAmounts[0]), "Flash loan repayment failed");
 
         emit FlashLoanExecuted(
             FlashLoanProvider.BALANCER_V2,
@@ -442,7 +453,7 @@ contract FlashLoanHub is
         Token token = Token(_tokenAddress);
         uint256 balance = token.balanceOf(address(this));
         require(balance > 0, "No tokens to sweep");
-        token.transfer(owner, balance);
+        require(token.transfer(owner, balance), "Sweep transfer failed");
         emit TokensSwept(msg.sender, _tokenAddress, balance);
     }
 

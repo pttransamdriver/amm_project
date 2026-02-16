@@ -12,6 +12,10 @@ import "./IArbitrageStrategy.sol";
  */
 contract TriangularArbitrage is IArbitrageStrategy {
     address public immutable owner;
+    address public authorizedCaller;
+
+    uint256 private constant SLIPPAGE_NUMERATOR = 995; // 0.5% max slippage
+    uint256 private constant SLIPPAGE_DENOMINATOR = 1000;
 
     // Storage is byte-packed so that tokenC and minProfit share a single 32-byte slot.
     struct TriangularParams {
@@ -42,12 +46,17 @@ contract TriangularArbitrage is IArbitrageStrategy {
         owner = msg.sender;
     }
 
+    function setAuthorizedCaller(address _caller) external onlyOwner {
+        authorizedCaller = _caller;
+    }
+
     function execute(
         address token,
         uint256 amount,
         uint256 fee,
         bytes calldata data
     ) external override returns (bool) {
+        require(msg.sender == authorizedCaller || msg.sender == owner, "Unauthorized caller");
         TriangularParams memory params = abi.decode(data, (TriangularParams));
 
         require(token == params.tokenA, "Token mismatch");
@@ -98,10 +107,16 @@ contract TriangularArbitrage is IArbitrageStrategy {
         uint256 amountIn
     ) internal returns (uint256) {
         uint256 deadline = block.timestamp + 300; // 5 minute deadline
-        if (tokenIn == address(dex.firstToken())) {
-            return dex.swapFirstToken(amountIn, 0, deadline); // minAmountOut=0 for arbitrage
+        bool isFirstToken = (tokenIn == address(dex.firstToken()));
+        uint256 expectedOut = isFirstToken
+            ? dex.calculateFirstTokenSwap(amountIn)
+            : dex.calculateSecondTokenSwap(amountIn);
+        uint256 minAmountOut = (expectedOut * SLIPPAGE_NUMERATOR) / SLIPPAGE_DENOMINATOR;
+
+        if (isFirstToken) {
+            return dex.swapFirstToken(amountIn, minAmountOut, deadline);
         } else {
-            return dex.swapSecondToken(amountIn, 0, deadline);
+            return dex.swapSecondToken(amountIn, minAmountOut, deadline);
         }
     }
 

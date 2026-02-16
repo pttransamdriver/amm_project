@@ -39,6 +39,8 @@ contract FlashArbitrage {
     
     uint256 private constant FLASHLOAN_FEE = 5; // 0.05%
     uint256 private constant FEE_DENOMINATOR = 10000;
+    uint256 private constant SLIPPAGE_NUMERATOR = 990; // 1% max slippage
+    uint256 private constant SLIPPAGE_DENOMINATOR = 1000;
     
     address public owner;
     
@@ -57,7 +59,7 @@ contract FlashArbitrage {
         address tokenB,
         uint256 amount,
         bool useUniswap
-    ) external {
+    ) external onlyOwner {
         // Get flashloan from our AMM
         uint256 fee = (amount * FLASHLOAN_FEE) / FEE_DENOMINATOR;
         
@@ -75,7 +77,10 @@ contract FlashArbitrage {
     function _arbitrageUniswap(address tokenA, address tokenB, uint256 amount) private {
         // Swap on Uniswap V3
         Token(tokenA).approve(address(uniswapRouter), amount);
-        
+
+        // Calculate minimum output with slippage tolerance
+        uint256 minUniOut = (amount * SLIPPAGE_NUMERATOR) / SLIPPAGE_DENOMINATOR;
+
         IUniswapV3Router.ExactInputSingleParams memory params = IUniswapV3Router.ExactInputSingleParams({
             tokenIn: tokenA,
             tokenOut: tokenB,
@@ -83,50 +88,66 @@ contract FlashArbitrage {
             recipient: address(this),
             deadline: block.timestamp + 300,
             amountIn: amount,
-            amountOutMinimum: 0,
+            amountOutMinimum: minUniOut,
             sqrtPriceLimitX96: 0
         });
-        
+
         uint256 amountOut = uniswapRouter.exactInputSingle(params);
-        
-        // Swap back on our AMM
+
+        // Swap back on our AMM with slippage protection
         Token(tokenB).approve(address(amm), amountOut);
         uint256 deadline = block.timestamp + 300;
-        if (tokenA == address(amm.firstToken())) {
-            amm.swapSecondToken(amountOut, 0, deadline);
+        bool isFirstToken = (tokenA == address(amm.firstToken()));
+        uint256 expectedAmmOut = isFirstToken
+            ? amm.calculateSecondTokenSwap(amountOut)
+            : amm.calculateFirstTokenSwap(amountOut);
+        uint256 minAmmOut = (expectedAmmOut * SLIPPAGE_NUMERATOR) / SLIPPAGE_DENOMINATOR;
+
+        if (isFirstToken) {
+            amm.swapSecondToken(amountOut, minAmmOut, deadline);
         } else {
-            amm.swapFirstToken(amountOut, 0, deadline);
+            amm.swapFirstToken(amountOut, minAmmOut, deadline);
         }
     }
     
     function _arbitrageSushi(address tokenA, address tokenB, uint256 amount) private {
-        // Swap on SushiSwap
+        // Swap on SushiSwap with slippage protection
         Token(tokenA).approve(address(sushiRouter), amount);
-        
+
         address[] memory path = new address[](2);
         path[0] = tokenA;
         path[1] = tokenB;
-        
+
+        // Get expected output and apply slippage tolerance
+        uint[] memory expectedAmounts = sushiRouter.getAmountsOut(amount, path);
+        uint256 minSushiOut = (expectedAmounts[1] * SLIPPAGE_NUMERATOR) / SLIPPAGE_DENOMINATOR;
+
         uint[] memory amounts = sushiRouter.swapExactTokensForTokens(
             amount,
-            0,
+            minSushiOut,
             path,
             address(this),
             block.timestamp + 300
         );
-        
-        // Swap back on our AMM
+
+        // Swap back on our AMM with slippage protection
         Token(tokenB).approve(address(amm), amounts[1]);
         uint256 deadline2 = block.timestamp + 300;
-        if (tokenA == address(amm.firstToken())) {
-            amm.swapSecondToken(amounts[1], 0, deadline2);
+        bool isFirstToken = (tokenA == address(amm.firstToken()));
+        uint256 expectedAmmOut = isFirstToken
+            ? amm.calculateSecondTokenSwap(amounts[1])
+            : amm.calculateFirstTokenSwap(amounts[1]);
+        uint256 minAmmOut = (expectedAmmOut * SLIPPAGE_NUMERATOR) / SLIPPAGE_DENOMINATOR;
+
+        if (isFirstToken) {
+            amm.swapSecondToken(amounts[1], minAmmOut, deadline2);
         } else {
-            amm.swapFirstToken(amounts[1], 0, deadline2);
+            amm.swapFirstToken(amounts[1], minAmmOut, deadline2);
         }
     }
     
     function withdrawProfits(address token) external onlyOwner {
         uint256 balance = Token(token).balanceOf(address(this));
-        Token(token).transfer(owner, balance);
+        require(Token(token).transfer(owner, balance), "Transfer failed");
     }
 }

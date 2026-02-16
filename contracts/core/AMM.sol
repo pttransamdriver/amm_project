@@ -20,10 +20,7 @@ contract AutomatedMarketMaker is ReentrancyGuard {
     // Slot 1: Second reserve
     uint256 public secondTokenReserve;
 
-    // Slot 2: Constant product
-    uint256 public constantProductK;
-
-    // Slot 3: Total shares
+    // Slot 2: Total shares (constantProductK removed — FIX Medium#4: was written but never read)
     uint256 public totalSharesCirculating;
 
     // Slot 4: FlashLoan fees first token
@@ -186,32 +183,33 @@ contract AutomatedMarketMaker is ReentrancyGuard {
             // This prevents price manipulation attacks on initial liquidity
             require(liquiditySharestoMint > MINIMUM_LIQUIDITY, "Initial liquidity too low");
 
-            unchecked {
-                firstTokenReserve += _firstTokenAmount;
-                secondTokenReserve += _secondTokenAmount;
-                totalSharesCirculating = liquiditySharestoMint;
-                userLiquidityShares[address(0)] = MINIMUM_LIQUIDITY;
-                userLiquidityShares[msg.sender] = liquiditySharestoMint - MINIMUM_LIQUIDITY;
-            }
+            firstTokenReserve += _firstTokenAmount;
+            secondTokenReserve += _secondTokenAmount;
+            totalSharesCirculating = liquiditySharestoMint;
+            userLiquidityShares[address(0)] = MINIMUM_LIQUIDITY;
+            userLiquidityShares[msg.sender] = liquiditySharestoMint - MINIMUM_LIQUIDITY;
         } else {
             uint256 proportionalSharesFromFirstToken = (totalSharesCirculating * _firstTokenAmount) / firstTokenReserve;
             uint256 proportionalSharesFromSecondToken = (totalSharesCirculating * _secondTokenAmount) / secondTokenReserve;
 
+            // FIX Medium#1: Percentage-based tolerance (0.5%) instead of integer division by 1000
+            uint256 larger = proportionalSharesFromFirstToken >= proportionalSharesFromSecondToken
+                ? proportionalSharesFromFirstToken
+                : proportionalSharesFromSecondToken;
+            uint256 smaller = proportionalSharesFromFirstToken < proportionalSharesFromSecondToken
+                ? proportionalSharesFromFirstToken
+                : proportionalSharesFromSecondToken;
             require(
-                (proportionalSharesFromFirstToken / 1000) == (proportionalSharesFromSecondToken / 1000),
+                (larger - smaller) * 10000 / larger <= 50,
                 "Must provide tokens in current pool ratio"
             );
             liquiditySharestoMint = proportionalSharesFromFirstToken;
 
-            unchecked {
-                firstTokenReserve += _firstTokenAmount;
-                secondTokenReserve += _secondTokenAmount;
-                totalSharesCirculating += liquiditySharestoMint;
-                userLiquidityShares[msg.sender] += liquiditySharestoMint;
-            }
+            firstTokenReserve += _firstTokenAmount;
+            secondTokenReserve += _secondTokenAmount;
+            totalSharesCirculating += liquiditySharestoMint;
+            userLiquidityShares[msg.sender] += liquiditySharestoMint;
         }
-
-        constantProductK = firstTokenReserve * secondTokenReserve;
 
         emit AddLiquidity(msg.sender, _firstTokenAmount, _secondTokenAmount, liquiditySharestoMint, block.timestamp);
     }
@@ -251,6 +249,9 @@ contract AutomatedMarketMaker is ReentrancyGuard {
         require(block.timestamp <= _deadline, "Transaction expired");
 
         // Anti-wash-trading protections
+        // NOTE Medium#3: Per-address checks are trivially bypassed via multiple addresses.
+        // This is an inherent blockchain limitation. MINIMUM_TRADE_AMOUNT partially mitigates
+        // by increasing the cost of Sybil wash-trading.
         require(_firstTokenAmount >= MINIMUM_TRADE_AMOUNT, "Trade too small");
         require(block.number > lastTradeBlock[msg.sender] + TRADE_COOLDOWN, "Trade cooldown active");
         require(!_getFlag(msg.sender, FLAG_ACTIVE_FLASHLOAN), "Cannot trade during flashloan");
@@ -264,6 +265,8 @@ contract AutomatedMarketMaker is ReentrancyGuard {
             blockTotalPriceImpact = 0;
             lastBlockTraded = uint128(block.number);
         }
+        // FIX Medium#2: Safe-cast check before uint64 downcast
+        require(priceImpact <= type(uint64).max, "Price impact overflow");
         blockTotalPriceImpact += uint64(priceImpact);
         require(blockTotalPriceImpact <= MAX_BLOCK_PRICE_IMPACT, "Block price impact exceeded");
 
@@ -283,12 +286,10 @@ contract AutomatedMarketMaker is ReentrancyGuard {
 
         require(firstToken.transferFrom(msg.sender, address(this), _firstTokenAmount), "Transfer failed");
 
-        unchecked {
-            firstTokenReserve += _firstTokenAmount;
-            secondTokenReserve -= secondTokenOutput;
-        }
+        firstTokenReserve += _firstTokenAmount;
+        secondTokenReserve -= secondTokenOutput;
 
-        secondToken.transfer(msg.sender, secondTokenOutput);
+        require(secondToken.transfer(msg.sender, secondTokenOutput), "Output transfer failed");
 
         // Update tracking
         lastTradeBlock[msg.sender] = block.number;
@@ -345,6 +346,8 @@ contract AutomatedMarketMaker is ReentrancyGuard {
             blockTotalPriceImpact = 0;
             lastBlockTraded = uint128(block.number);
         }
+        // FIX Medium#2: Safe-cast check before uint64 downcast
+        require(priceImpact <= type(uint64).max, "Price impact overflow");
         blockTotalPriceImpact += uint64(priceImpact);
         require(blockTotalPriceImpact <= MAX_BLOCK_PRICE_IMPACT, "Block price impact exceeded");
 
@@ -364,12 +367,10 @@ contract AutomatedMarketMaker is ReentrancyGuard {
 
         require(secondToken.transferFrom(msg.sender, address(this), _secondTokenAmount), "Transfer failed");
 
-        unchecked {
-            secondTokenReserve += _secondTokenAmount;
-            firstTokenReserve -= firstTokenOutput;
-        }
+        secondTokenReserve += _secondTokenAmount;
+        firstTokenReserve -= firstTokenOutput;
 
-        firstToken.transfer(msg.sender, firstTokenOutput);
+        require(firstToken.transfer(msg.sender, firstTokenOutput), "Output transfer failed");
 
         // Update tracking
         lastTradeBlock[msg.sender] = block.number;
@@ -396,14 +397,10 @@ contract AutomatedMarketMaker is ReentrancyGuard {
         firstTokenAmount = (_sharesToWithdraw * firstTokenReserve) / totalSharesCirculating;
         secondTokenAmount = (_sharesToWithdraw * secondTokenReserve) / totalSharesCirculating;
 
-        unchecked {
-            totalSharesCirculating -= _sharesToWithdraw;
-            userLiquidityShares[msg.sender] -= _sharesToWithdraw;
-            firstTokenReserve -= firstTokenAmount;
-            secondTokenReserve -= secondTokenAmount;
-        }
-
-        constantProductK = firstTokenReserve * secondTokenReserve;
+        totalSharesCirculating -= _sharesToWithdraw;
+        userLiquidityShares[msg.sender] -= _sharesToWithdraw;
+        firstTokenReserve -= firstTokenAmount;
+        secondTokenReserve -= secondTokenAmount;
 
         require(firstToken.transfer(msg.sender, firstTokenAmount), "Transfer failed");
         require(secondToken.transfer(msg.sender, secondTokenAmount), "Transfer failed");
@@ -440,10 +437,8 @@ contract AutomatedMarketMaker is ReentrancyGuard {
         uint256 balanceAfter = firstToken.balanceOf(address(this));
         require(balanceAfter >= balanceBefore + fee, "Flashloan not repaid");
 
-        unchecked {
-            totalFlashLoanFeesFirstToken += fee;
-            firstTokenReserve += fee;
-        }
+        totalFlashLoanFeesFirstToken += fee;
+        firstTokenReserve += fee;
 
         // Clear flashloan flag
         _setFlag(msg.sender, FLAG_ACTIVE_FLASHLOAN, false);
@@ -476,10 +471,8 @@ contract AutomatedMarketMaker is ReentrancyGuard {
         uint256 balanceAfter = secondToken.balanceOf(address(this));
         require(balanceAfter >= balanceBefore + fee, "Flashloan not repaid");
 
-        unchecked {
-            totalFlashLoanFeesSecondToken += fee;
-            secondTokenReserve += fee;
-        }
+        totalFlashLoanFeesSecondToken += fee;
+        secondTokenReserve += fee;
 
         // Clear flashloan flag
         _setFlag(msg.sender, FLAG_ACTIVE_FLASHLOAN, false);
@@ -506,10 +499,8 @@ contract AutomatedMarketMaker is ReentrancyGuard {
             history.lastResetBlock = uint64(block.number);
         }
 
-        unchecked {
-            history.totalVolume += uint128(amount);
-            history.tradeCount += 1;
-        }
+        history.totalVolume += uint128(amount);
+        history.tradeCount += 1;
 
         // Flag suspicious high-frequency trading
         if (history.tradeCount > MAX_TRADES_PER_PERIOD) {

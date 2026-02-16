@@ -64,7 +64,7 @@ export const loadTokens = async (provider, chainId, dispatch) => {
 }
 
 export const loadAMM = async (provider, chainId, dispatch) => {
-  const amm = new ethers.Contract(config[chainId].amm.address, AMM_ABI, provider)
+  const amm = new ethers.Contract(config[chainId].amm.target, AMM_ABI, provider)
 
   dispatch(setContract(amm))
 
@@ -98,10 +98,10 @@ export const addLiquidity = async (provider, amm, tokens, amounts, dispatch) => 
 
     let transaction
 
-    transaction = await tokens[0].connect(signer).approve(amm.address, amounts[0])
+    transaction = await tokens[0].connect(signer).approve(amm.target, amounts[0])
     await transaction.wait()
 
-    transaction = await tokens[1].connect(signer).approve(amm.address, amounts[1])
+    transaction = await tokens[1].connect(signer).approve(amm.target, amounts[1])
     await transaction.wait()
 
     transaction = await amm.connect(signer).addLiquidity(amounts[0], amounts[1])
@@ -142,13 +142,26 @@ export const swap = async (provider, amm, token, symbol, amount, dispatch) => {
 
     const signer = await provider.getSigner()
 
-    transaction = await token.connect(signer).approve(amm.address, amount)
+    transaction = await token.connect(signer).approve(amm.target, amount)
     await transaction.wait()
 
+    // Calculate expected output and apply 0.5% slippage tolerance
+    let expectedOutput
     if (symbol === "DAPP") {
-      transaction = await amm.connect(signer).swapToken1(amount)
+      expectedOutput = await amm.calculateToken1Swap(amount)
     } else {
-      transaction = await amm.connect(signer).swapToken2(amount)
+      expectedOutput = await amm.calculateToken2Swap(amount)
+    }
+    const minAmountOut = expectedOutput * 995n / 1000n
+
+    // Deadline: 20 minutes from the latest block
+    const block = await provider.getBlock('latest')
+    const deadline = block.timestamp + 1200
+
+    if (symbol === "DAPP") {
+      transaction = await amm.connect(signer).swapFirstToken(amount, minAmountOut, deadline)
+    } else {
+      transaction = await amm.connect(signer).swapSecondToken(amount, minAmountOut, deadline)
     }
 
     await transaction.wait()

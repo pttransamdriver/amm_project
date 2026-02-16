@@ -15,6 +15,7 @@ import "./IArbitrageStrategy.sol";
 // The "IArbitrageStrategy" interface defines the functions that all arbitrage strategies must implement. This is necessary for the FlashLoanHub to interact with the strategy.
 contract SimpleArbitrage is IArbitrageStrategy {
     address public immutable owner;
+    address public authorizedCaller;
 
     uint256 private constant SLIPPAGE_NUMERATOR = 995; // 0.5% slippage
     uint256 private constant SLIPPAGE_DENOMINATOR = 1000;
@@ -46,12 +47,17 @@ contract SimpleArbitrage is IArbitrageStrategy {
         owner = msg.sender;
     }
 
+    function setAuthorizedCaller(address _caller) external onlyOwner {
+        authorizedCaller = _caller;
+    }
+
     function execute(
         address token,
         uint256 amount,
         uint256 fee,
         bytes calldata data
     ) external override returns (bool) {
+        require(msg.sender == authorizedCaller || msg.sender == owner, "Unauthorized caller");
         ArbitrageParams memory params = abi.decode(data, (ArbitrageParams));
 
         require(token == params.tokenIn, "Token mismatch");
